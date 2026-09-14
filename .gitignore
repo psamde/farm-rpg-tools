@@ -4,6 +4,7 @@ __pycache__/
 cache/
 data/*
 !data/catalog.json
+!data/location-icons.json
 .env
 .env.*
 !.env.example
