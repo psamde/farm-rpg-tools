@@ -1,12 +1,14 @@
 importScripts('vendor/pyodide/pyodide.js','vendor/highs/highs.js','solver-experiments.js');
 let runtime,experiments;
+const assetVersion=new URL(self.location.href).searchParams.get('v')||'dev';
+const versioned=name=>name+'?v='+encodeURIComponent(assetVersion);
 async function initialize(){
  const highs=await Module({locateFile:name=>new URL('vendor/highs/'+name,self.location.href).href});
  experiments=solverExperiments(highs);
  const py=await loadPyodide({indexURL:new URL('vendor/pyodide/',self.location.href).href});
  await py.loadPackage('scipy');
- for(const name of ['planner.py','secondary.py','browser_engine.py','wasm_solver.py']){const response=await fetch(name);if(!response.ok)throw Error('Could not load '+name);py.FS.writeFile('/home/pyodide/'+name,await response.text());}
- const response=await fetch('catalog.json');if(!response.ok)throw Error('Could not load catalog');
+ for(const name of ['planner.py','secondary.py','balanced.py','browser_engine.py','wasm_solver.py']){const response=await fetch(versioned(name));if(!response.ok)throw Error('Could not load '+name);py.FS.writeFile('/home/pyodide/'+name,await response.text());}
+ const response=await fetch(versioned('catalog.json'));if(!response.ok)throw Error('Could not load catalog');
  py.globals.set('catalog_json',JSON.stringify((await response.json()).catalog));
  py.globals.set('highs_solve',(lp,opts)=>JSON.stringify(experiments.solve(lp,JSON.parse(opts))));
  py.runPython('from wasm_solver import install\ninstall(highs_solve)');

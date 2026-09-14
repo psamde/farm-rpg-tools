@@ -1,9 +1,7 @@
-"""Shared-pool allocation and joint exploration/crafting optimization.
+"""Validate leftover selections and dispatch to the balanced shared-pool model.
 
-Credit originates in a frozen supply snapshot. Continuous credit flows
-through the recipe DAG, with capacity proportional to actual ingredient use.
-Each selected craft maximizes its input credit in priority order. Exploration
-then minimizes the cost of that allocation; new drops never create credit.
+The previous credit-flow allocator remains private as a regression oracle.
+Application calls use balanced.py; they never use the frozen-pool algorithm.
 """
 from collections import Counter
 from copy import deepcopy
@@ -40,6 +38,13 @@ def validate_secondary(catalog, rows):
 
 
 def consume_leftovers(catalog, primary, requested, areas=None, max_areas=15, progress=None, defer_comparison=None):
+    from balanced import consume
+    goals = validate_secondary(catalog, requested)
+    if not goals: return primary
+    return consume(catalog,primary,goals,areas,max_areas,progress)
+
+
+def _consume_priority_legacy(catalog, primary, requested, areas=None, max_areas=15, progress=None, defer_comparison=None):
     goals = validate_secondary(catalog, requested)
     if not any(g['allow_exploration'] and g.get('exploration_item_id') for g in goals):
         return _consume_leftovers(catalog, primary, goals, areas, max_areas, progress, defer_comparison)

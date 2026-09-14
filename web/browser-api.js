@@ -1,7 +1,9 @@
 // Static files only: this adapter keeps the UI API while jobs run in a worker.
 const browserPlanner=(()=>{
  let bundle,worker=null,active=null,serial=0;const jobs=new Map();
- async function data(){return bundle??=fetch('catalog.json').then(r=>{if(!r.ok)throw Error('Could not load catalog');return r.json();});}
+ const version=document.querySelector('.appversion')?.textContent.trim()||'dev';
+ function asset(name){const url=new URL(name,document.baseURI);url.searchParams.set('v',version);return url;}
+ async function data(){return bundle??=fetch(asset('catalog.json')).then(r=>{if(!r.ok)throw Error('Could not load catalog');return r.json();});}
  function cancel(){if(worker){worker.terminate();worker=null;}if(active&&jobs.has(active))jobs.set(active,{status:'error',error:'Superseded by a newer plan.'});active=null;}
  async function api(url,payload){
   if(url==='/api/catalog')return (await data()).metadata;
@@ -10,7 +12,7 @@ const browserPlanner=(()=>{
   if(url==='/api/plan'){
    if(active)cancel();const id=String(++serial);active=id;jobs.set(id,{status:'queued'});
    while(jobs.size>8)jobs.delete(jobs.keys().next().value);
-   if(!worker)worker=new Worker(new URL('python-worker.js',document.baseURI));
+   if(!worker)worker=new Worker(asset('python-worker.js'));
    worker.onmessage=({data})=>{if(active!==id)return;jobs.set(id,data);if(data.status==='complete'||data.status==='error')active=null;};
    worker.onerror=e=>{if(active!==id)return;jobs.set(id,{status:'error',error:e.message||'Browser calculation failed.'});active=null;worker?.terminate();worker=null;};
    worker.postMessage(payload);return {job_id:id};
