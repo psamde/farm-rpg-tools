@@ -11,12 +11,22 @@ assert.equal(await p.locator('.routegroup .routecard').count(),await p.locator('
 const sequence=await p.locator('#craftworksSetup summary').allTextContents();assert.ok(sequence[0].startsWith('Keep active: Forest'));assert.ok(sequence[1].startsWith('After Forest'));assert.ok(sequence[2].startsWith('Keep active: Small Cave'));
 await p.locator('#craftworksSlots').fill('20');await p.locator('#craftworksSlots').dispatchEvent('change');
 assert.ok(await p.locator('.routegroup').evaluateAll(gs=>gs.some(g=>g.querySelectorAll('.routecard').length>1)));
-for(const width of [390,1280]){
+for(const width of [320,390,768,1280]){
  await p.setViewportSize({width,height:900});
  assert.ok(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
- await p.locator('#routePanel').scrollIntoViewIfNeeded();
+ if(width<=800){
+ assert.ok(await p.locator('#routeCards').evaluate(e=>e.scrollWidth<=e.clientWidth+1));
+ assert.equal(await p.locator('.draghandle').first().isVisible(),false);
+ const cards=await p.locator('.routecard').evaluateAll(es=>es.map(e=>e.getBoundingClientRect().toJSON()));
+ assert.ok(cards[1].y>=cards[0].bottom);
+ }else assert.equal(await p.locator('#routeCards').evaluate(e=>getComputedStyle(e).flexDirection),'row');
+ await p.locator('#routeCards').scrollIntoViewIfNeeded();
  await p.screenshot({path:'../../work/route-groups-'+width+'.png'});
 }
+await p.setViewportSize({width:390,height:900});
+const secondId=await p.locator('.secondaryrow').nth(1).getAttribute('data-leftover-id');
+await p.getByRole('button',{name:'Lower priority of Leather Diary',exact:true}).click();
+assert.equal(await p.locator('.secondaryrow').first().getAttribute('data-leftover-id'),secondId);
 await p.locator('#suggestAll').click();assert.equal(await p.locator('[data-suggestion="837"]').count(),0);
 await p.locator('#closeSuggestions').click();
 await p.locator('.routegroupbadge').first().click();assert.equal(await p.locator('#craft-stop-group-0').evaluate(e=>e.open),true);

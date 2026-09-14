@@ -250,3 +250,23 @@ body.reordering,body.reordering *{cursor:grabbing!important;user-select:none!imp
 }
 
 .savedplanfields{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:16px}.savedplanfields>div{min-width:0}.plansave>.saveactions{display:flex;flex-wrap:wrap;gap:8px}.plansave>details{margin-top:16px;padding-top:16px}@media(max-width:800px){.savedplanfields{grid-template-columns:1fr;gap:4px}}
+
+/* Phone routes read top to bottom; desktop keeps the horizontal circuit. */
+@media(max-width:800px){
+ .secondaryrow .prioritycontrols .draghandle{display:none}
+ .secondaryrow .prioritycontrols::after{content:"Use arrows to set priority"}
+ .routecards{flex-direction:column;overflow:visible;contain:none;width:100%;gap:8px}
+ .routegroup{width:100%;flex:0 0 auto;padding:10px}
+ .routegroupcards{flex-direction:column;gap:8px}
+ .routegroupcards .routecard{width:100%;flex:0 0 auto;display:grid;grid-template-columns:40px minmax(0,1fr);gap:5px 12px;padding:12px;text-align:left;align-items:center}
+ .routegroupcards .routecard>*{grid-column:2;min-width:0}
+ .routegroupcards .routecard>.gameicon,.routegroupcards .routecard>.areaicon{grid-column:1;grid-row:1 / 4;width:40px;height:40px;align-self:start}
+ .routegroupcards .routecard>b{font-size:22px}
+ .routegroupcards .routecard p{margin:4px 0 0}
+ .routecards .routetransition{flex:0 0 auto;max-width:none;width:100%;min-height:28px;flex-direction:row;justify-content:center;align-items:center;gap:12px}
+ .routecards .routetransition:not(.looptransition)>span:not(.sr){transform:rotate(90deg)}
+ .routecards .routetransition button{width:auto;min-width:44px;min-height:44px;padding:8px 12px;gap:6px}
+ .routecards .routetransition button::after{content:"Craftworks";font-size:11px}
+ .routegroupbadge{min-height:44px}
+}
+@media(pointer:coarse){.secondaryrow .prioritycontrols .draghandle{display:none}}

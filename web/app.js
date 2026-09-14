@@ -258,7 +258,7 @@ function routeTransition(loop,area,index){const stop=!loop.continuous&&loop.craf
  const nextIndex=!loop.continuous?(loop.activeGroups||[]).findIndex(g=>g.start===index+1):-1;
  const next=nextIndex>=0?loop.activeGroups[nextIndex]:null;
  const label=stop?`After ${area.name}: finish this stretch’s crafting${next?`, then load the setup for ${next.from} through ${next.to}`:''}. Open setup.`:next?`Change Craftworks for ${next.from} through ${next.to}. Open setup.`:'Keep the current setup active';
- return `<div class="routetransition" title="${esc(label)}${last?' Empty surplus and repeat loop.':''}"><span aria-hidden="true">${last?'↻':'→'}</span>${stop||next?`<button type="button" data-craft-stop="${stop?esc(area.id):'group-'+nextIndex}" aria-label="${esc(label)}"><span aria-hidden="true">⚒</span><small>${stop?stop.sets.length:1}</small></button>`:''}${last?'<span class="sr">Empty surplus. Repeat loop.</span>':''}</div>`;}
+ return `<div class="routetransition${last?' looptransition':''}" title="${esc(label)}${last?' Empty surplus and repeat loop.':''}"><span aria-hidden="true">${last?'↻':'→'}</span>${stop||next?`<button type="button" data-craft-stop="${stop?esc(area.id):'group-'+nextIndex}" aria-label="${esc(label)}"><span aria-hidden="true">⚒</span><small>${stop?stop.sets.length:1}</small></button>`:''}${last?'<span class="sr">Empty surplus. Repeat loop.</span>':''}</div>`;}
 
 $('routeCards').onclick=e=>{const b=e.target.closest('[data-craft-stop]');if(!b)return;const panel=document.getElementById('craft-stop-'+b.dataset.craftStop);if(panel){$('craftworksDisclosure').open=true;panel.open=true;panel.scrollIntoView({behavior:'smooth',block:'center'});}};
 
@@ -401,6 +401,7 @@ function finishLeftoverDrag(commit){
  if(reordered.some((r,i)=>r!==state.secondary[i])){state.secondary=reordered;changed();}}
 }
 $('secondaryRows').addEventListener('pointerdown',e=>{
+ if(e.pointerType==='touch'||matchMedia('(max-width:800px)').matches)return;
  const handle=e.target.closest('[data-drag-leftover]');if(!handle||e.button!==0||state.secondary.length<2)return;
  e.preventDefault();handle.setPointerCapture(e.pointerId);
  leftoverDrag={id:handle.dataset.dragLeftover,handle,pointer:e.pointerId,startY:e.clientY,y:e.clientY,moved:false,before:handle.dataset.dragLeftover};
