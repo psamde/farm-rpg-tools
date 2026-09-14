@@ -33,4 +33,7 @@ jobs:
       - name: Build static site
         run: python build_static.py
       - name: Check leftover allocation in WebAssembly
-        run: node test_bottle_wasm.cjs
+        run: |
+          node test_bottle_wasm.cjs
+          node test_bottle_wasm.cjs test_anchored_plan.json
+          node test_bottle_wasm.cjs test_anchored_plan.json --net-off

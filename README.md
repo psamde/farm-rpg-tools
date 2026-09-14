@@ -36,6 +36,10 @@ Open **http://127.0.0.1:8765** and leave the terminal running. Press Ctrl+C to s
 - Add target items and craft quantities; edit or remove them to recompute.
 - Pick a ranked plan to see its per-area used/unused items.
 - Click an unused material, select a consuming recipe, and add its desired quantity.
+- For extra exploration, choose the ingredient to use up. Its original supply
+  (including what can be crafted from original leftovers) determines the goal;
+  new drops do not increase that exploration goal. Priorities and optional caps
+  still apply. Older saves ask for this ingredient before enabling extra exploring.
 - All goals are optimized jointly. Predicted leftovers are never silently treated as starting inventory.
 - The comparison metric shows the change in the cheapest plan vs the previous successful target list, only when settings and starting inventory are unchanged. It compares the cheapest options, not a previously selected slower route.
 - Iron Depot provides free Iron/Nails; Runecube selects its exploration drop tables. Area selections control which locations are assumed accessible.

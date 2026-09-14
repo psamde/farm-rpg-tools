@@ -4,6 +4,7 @@ const c={TextEncoder,TextDecoder,btoa,atob,items:{raw:{explorable:true,craftable
 vm.runInContext(source.match(/const defaults=.*?;/)[0]+';globalThis.base=defaults;',c);
 vm.runInContext(source.slice(source.indexOf('function eligibleTarget('),source.indexOf('function addTarget(')),c);
 vm.runInContext(source.slice(source.indexOf('function encodePlanCode('),source.indexOf("$('generatePlanCode').onclick")),c);
+vm.runInContext(source.slice(source.indexOf('function explorationIngredients('),source.indexOf('function addSecondary(')),c);
 const input={...c.base,targets:{raw:200,craft:10},areas:['area'],secondary:[{item_id:'craft',cap:5,allow_exploration:true}],inventory:'{"raw":3}',route_foods:{neigh:true},resource_saver:45};
 assert.deepEqual(JSON.parse(JSON.stringify(c.decodePlanCode(c.encodePlanCode(input)))),JSON.parse(JSON.stringify(input)));
 assert.throws(()=>c.decodePlanCode('bad'));
@@ -38,3 +39,9 @@ const starter=c.starterPlan();assert.equal(starter.targets['126'],1000);assert.e
 assert.equal(c.withSettingDefaults({targets:{raw:7},secondary:[]}).secondary.length,0);
 assert.equal(c.withSettingDefaults({targets:{raw:7},secondary:[]}).targets.raw,7);
 console.log('First-run example is independent of saved plans and migration defaults');
+
+c.items.craft.direct_ingredients={raw:1};
+const anchored={...input,secondary:[{item_id:'craft',cap:5,allow_exploration:true,exploration_item_id:'raw'}]};
+assert.equal(c.decodePlanCode(c.encodePlanCode(anchored)).secondary[0].exploration_item_id,'raw');
+assert.throws(()=>c.decodePlanCode(c.encodePlanCode({...anchored,secondary:[{...anchored.secondary[0],exploration_item_id:'bad'}]})));
+console.log('Chosen exploration ingredients survive saves; unrelated ingredients are rejected');

@@ -272,3 +272,7 @@ body.reordering,body.reordering *{cursor:grabbing!important;user-select:none!imp
 @media(pointer:coarse){.secondaryrow .prioritycontrols .draghandle{display:none}}
 
 .appversion{display:inline-block;vertical-align:middle;font-size:.38em;font-weight:600;line-height:1.5;letter-spacing:0;padding:.1em .5em;margin-left:.35em;border:1px solid currentColor;border-radius:.4em;opacity:.7;white-space:nowrap}
+
+.secondaryexplore{display:flex;flex-direction:column;gap:6px;min-width:0}.anchorchoice{display:flex;align-items:center;gap:6px;font-size:.8rem}.anchorchoice select{min-width:0;width:100%;max-width:230px;padding:6px}.anchorhint{grid-column:1/-1}.anchorhint .hint{margin:0}.anchorhint .itemicon{width:18px;height:18px}
+
+.secondaryexplore .check,.secondaryexplore .anchorchoice{margin:0}.anchorhint .gameicon{width:18px;height:18px}

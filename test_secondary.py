@@ -8,6 +8,44 @@ from test_planner import small_catalog
 
 
 class SecondaryTests(unittest.TestCase):
+    def test_selected_ingredient_controls_extra_exploration(self):
+        c, _ = self.fixture()
+        c['items']['6']['direct_ingredients'] = {'1': 1, '2': 1}
+        p = plan(c, 'Target', 1, inventory={'A':11, 'B':6})
+        goals = [{'item_id':'6', 'allow_exploration':True, 'exploration_item_id':'2'}]
+        limited = consume_leftovers(c, p, goals)
+        self.assertEqual(limited['secondary']['targets'][0]['crafts'], 5)
+        self.assertEqual(limited['optimal_total_explores'], 0)
+        goals[0]['exploration_item_id'] = '1'
+        topped_up = consume_leftovers(c, p, goals)
+        self.assertEqual(topped_up['secondary']['targets'][0]['crafts'], 10)
+        self.assertEqual(topped_up['optimal_total_explores'], 9)
+        self.assert_balanced(topped_up)
+
+    def test_selected_ingredient_is_shared_in_priority_order(self):
+        c, p = self.fixture()
+        result = consume_leftovers(c, p, [
+            {'item_id':'5','allow_exploration':True,'exploration_item_id':'1','cap':4},
+            {'item_id':'6','allow_exploration':True,'exploration_item_id':'1'}])
+        self.assertEqual([t['crafts'] for t in result['secondary']['targets']], [4,3])
+        self.assertEqual(result['optimal_total_explores'], 0)
+        self.assert_balanced(result)
+
+    def test_crafted_anchor_cannot_be_replenished_for_more_credit(self):
+        c, _ = self.fixture()
+        c['items']['6']['direct_ingredients'] = {'5':1,'2':2}
+        p = plan(c, 'Target', 1, inventory={'A':1,'B':1,'First':10})
+        result = consume_leftovers(c, p, [{'item_id':'6','allow_exploration':True,'exploration_item_id':'5'}])
+        self.assertEqual(result['secondary']['targets'][0]['crafts'], 10)
+        self.assert_balanced(result)
+        with self.assertRaises(ValueError):
+            consume_leftovers(c,p,[{'item_id':'6','exploration_item_id':'4'}])
+        # An intermediate can also be made from existing raw leftovers.
+        p = plan(c, 'Target', 1, inventory={'A':11,'B':1})
+        result = consume_leftovers(c, p, [{'item_id':'6','allow_exploration':True,'exploration_item_id':'5'}])
+        self.assertEqual(result['secondary']['targets'][0]['crafts'], 10)
+        self.assert_balanced(result)
+
     def test_fractional_bottle_surplus_does_not_reward_overproduction(self):
         from browser_engine import compute
         root = Path(__file__).parent

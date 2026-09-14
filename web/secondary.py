@@ -28,7 +28,14 @@ def validate_secondary(catalog, rows):
         if cap is not None and (type(cap) is not int or not 0 <= cap <= 100000000):
             raise ValueError('Leftover caps must be whole numbers from 0 to 100,000,000, or blank.')
         seen.add(ref)
-        result.append({'item_id': ref, 'allow_exploration': assist, 'cap': cap})
+        anchor = row.get('exploration_item_id')
+        if anchor is not None:
+            anchor = resolve(catalog['items'], str(anchor))
+            def contains(parent):
+                return any(child == anchor or contains(child) for child in catalog['items'][parent]['direct_ingredients'])
+            if not contains(ref):
+                raise ValueError('The exploration ingredient must be part of this recipe.')
+        result.append({'item_id': ref, 'allow_exploration': assist, 'cap': cap, **({'exploration_item_id': anchor} if anchor is not None else {})})
     return result
 
 
@@ -157,11 +164,30 @@ def consume_leftovers(catalog, primary, requested, areas=None, max_areas=15, pro
     for loc, drops in rates.items():
         bound = max(original_e.get(loc, 0), math.ceil(sum(q / drops[ref] for ref, q in total_need.items() if ref in drops)) + 100)
         E[loc] = variable(0 if assisted else original_e.get(loc, 0), bound if assisted else original_e.get(loc, 0), True)
-        if assisted:
+        if assisted and max_areas < len(rates):
             Y[loc] = variable(hi=1, whole=True)
-    S = {ref: variable(hi=pool[ref] * density[ref]) for ref in sorted(c_refs) if ref in pool and density[ref] > 0}
-    F = {(ref, child): variable() for ref in c_order for child in items[ref]['direct_ingredients'] if density[child] > 0}
-    G = {ref: variable() for ref in c_order}
+    anchored = any(g.get('exploration_item_id') and g['allow_exploration'] for g in goals)
+    if not anchored:
+        S = {ref: variable(hi=pool[ref] * density[ref]) for ref in sorted(c_refs) if ref in pool and density[ref] > 0}
+        F = {(ref, child): variable() for ref in c_order for child in items[ref]['direct_ingredients'] if density[child] > 0}
+        G = {ref: variable() for ref in c_order}
+    else:
+        # Track each original material separately: credit from Horn cannot be
+        # replaced by credit from Stone, nor created by additional exploration.
+        origin_density = {}
+        for origin in sorted(c_refs & pool.keys()):
+            if origin in free:
+                continue
+            d = {ref: 0 for ref in c_refs}
+            d[origin] = credit_scale / pool[origin]
+            for ref in c_order:
+                if ref != origin and ref not in free:
+                    d[ref] = sum(q * factor * d[child] for child, q in items[ref]['direct_ingredients'].items()) / items[ref]['output_quantity']
+            origin_density[origin] = d
+        S = {origin: variable(hi=credit_scale) for origin in origin_density}
+        F = {(origin, ref, child): variable() for origin, d in origin_density.items()
+             for ref in c_order if ref != origin for child in items[ref]['direct_ingredients'] if d[child] > 0}
+        G = {(origin, ref): variable() for origin, d in origin_density.items() for ref in c_order if ref != origin and d[ref] > 0}
     rules, lows, highs = [], [], []
     def rule(terms, lo=-math.inf, hi=math.inf):
         rules.append(terms); lows.append(lo); highs.append(hi)
@@ -185,22 +211,41 @@ def consume_leftovers(catalog, primary, requested, areas=None, max_areas=15, pro
     for ref in c_order:
         rule({N[ref]: 1, C[ref]: -1}, hi=0)
     no_extra = {g['item_id'] for g in goals if not g['allow_exploration']}
-    for (craft, child), col in F.items():
-        quantity = items[craft]['direct_ingredients'][child] * factor * density[child]
-        rule({col: 1, (N if craft in no_extra else C)[craft]: -quantity}, hi=0)
-    for ref in c_order:
-        terms = {G[ref]: 1}
-        terms.update({col: -1 for (craft, _), col in F.items() if craft == ref})
-        rule(terms, lo=0, hi=0)
-        rule({G[ref]: 1, C[ref]: -items[ref]['output_quantity'] * density[ref]}, hi=0)
-    for ref in sorted(c_refs):
-        terms = {col: 1 for (_, child), col in F.items() if child == ref}
-        if ref in S: terms[S[ref]] = -1
-        if ref in G: terms[G[ref]] = -1
-        rule(terms, hi=0)
+    if not anchored:
+        for (craft, child), col in F.items():
+            quantity = items[craft]['direct_ingredients'][child] * factor * density[child]
+            rule({col: 1, (N if craft in no_extra else C)[craft]: -quantity}, hi=0)
+        for ref in c_order:
+            terms = {G[ref]: 1}
+            terms.update({col: -1 for (craft, _), col in F.items() if craft == ref})
+            rule(terms, lo=0, hi=0)
+            rule({G[ref]: 1, C[ref]: -items[ref]['output_quantity'] * density[ref]}, hi=0)
+        for ref in sorted(c_refs):
+            terms = {col: 1 for (_, child), col in F.items() if child == ref}
+            if ref in S: terms[S[ref]] = -1
+            if ref in G: terms[G[ref]] = -1
+            rule(terms, hi=0)
+    else:
+        for (origin, craft, child), col in F.items():
+            quantity = items[craft]['direct_ingredients'][child] * factor * origin_density[origin][child]
+            rule({col: 1, (N if craft in no_extra else C)[craft]: -quantity}, hi=0)
+        for (origin, ref), col in G.items():
+            terms = {col: 1}
+            terms.update({edge: -1 for (o, craft, _), edge in F.items() if o == origin and craft == ref})
+            rule(terms, lo=0, hi=0)
+            if any(g['allow_exploration'] and g.get('exploration_item_id') == ref for g in goals):
+                # A crafted anchor may come from original ingredients, but
+                # extra exploration must not replenish its credited supply.
+                rule({col: 1, N[ref]: -items[ref]['output_quantity']*origin_density[origin][ref]}, hi=0)
+        for origin, d in origin_density.items():
+            for ref in sorted(c_refs):
+                terms = {edge: 1 for (o, _, child), edge in F.items() if o == origin and child == ref}
+                if ref == origin: terms[S[origin]] = -1
+                if (origin, ref) in G: terms[G[origin, ref]] = -1
+                if terms: rule(terms, hi=0)
     for loc, col in Y.items():
         rule({E[loc]: 1, col: -upper[E[loc]]}, hi=0)
-    if assisted:
+    if Y:
         rule({col: 1 for col in Y.values()}, hi=max_areas)
 
     matrix = np.zeros((len(rules), len(lower)))
@@ -245,7 +290,16 @@ def consume_leftovers(catalog, primary, requested, areas=None, max_areas=15, pro
     pending_comparisons = []
     for goal in goals:
         ref = goal['item_id']
-        reward = objective(col for (craft, _), col in F.items() if craft == ref)
+        if anchored:
+            anchor = goal.get('exploration_item_id') if goal['allow_exploration'] else None
+            def through_anchor(origin, child):
+                if anchor is None:
+                    return True
+                return ((origin == anchor or ingredient_amount(anchor, origin) > 0)
+                        and (child == anchor or ingredient_amount(child, anchor) > 0))
+            reward = objective(col for (origin, craft, child), col in F.items() if craft == ref and through_anchor(origin, child))
+        else:
+            reward = objective(col for (craft, _), col in F.items() if craft == ref)
         alone = solve(-reward)
         best = float(reward @ alone.x)
         ranked = solve(-reward, locked)
@@ -335,6 +389,11 @@ def consume_leftovers(catalog, primary, requested, areas=None, max_areas=15, pro
                       crafts_from_final_surplus=extra_counts.get(ref,0),
                       lost_to_priority=lost, pool_credit_used=credits[i]/credit_scale, pool_credit_if_first=maxima[i]/credit_scale,
                       missing_for_next_craft=[])
+        if g.get('exploration_item_id') and g['allow_exploration']:
+            anchor = g['exploration_item_id']
+            target['exploration_ingredient'] = dict(item_id=anchor, name=items[anchor]['name'],
+                available=pool.get(anchor, 0), used=credits[i]*pool.get(anchor, 0)/credit_scale,
+                planned_crafts=base_count)
         if not count:
             available = {r: max(0, b['expected_final_inventory']-b['reserved_target_output']) for r, b in balances.items()}
             missing = Counter()

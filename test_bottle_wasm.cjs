@@ -11,7 +11,9 @@ const assert = require('node:assert/strict');
   const highs = await require('./web/vendor/highs/highs.js')();
   py.globals.set('highs_solve', (lp, opts) => JSON.stringify(highs.solve(lp, JSON.parse(opts))));
   py.globals.set('catalog_json', fs.readFileSync('data/catalog.json', 'utf8'));
-  py.globals.set('payload_json', fs.readFileSync('test_bottle_plan.json', 'utf8'));
+  const payload = JSON.parse(fs.readFileSync(process.argv[2] || 'test_bottle_plan.json', 'utf8'));
+  if (process.argv.includes('--net-off')) payload.secondary.find(g => g.item_id === '500').allow_exploration = false;
+  py.globals.set('payload_json', JSON.stringify(payload));
   const result = JSON.parse(py.runPython(`
 import json
 from wasm_solver import install
