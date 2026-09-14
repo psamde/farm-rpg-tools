@@ -1,0 +1,11 @@
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
+const s=fs.readFileSync('web/app.js','utf8'),c={};vm.createContext(c);
+vm.runInContext(s.slice(s.indexOf('function reorderLeftover('),s.indexOf('let leftoverDrag=')),c);
+const rows=['a','b','c','d'].map(item_id=>({item_id,cap:7,allow_exploration:true}));
+const ids=x=>Array.from(x,r=>r.item_id).join('');
+assert.equal(ids(c.reorderLeftover(rows,'a','d')),'bcad');
+assert.equal(ids(c.reorderLeftover(rows,'d','a')),'dabc');
+assert.equal(ids(c.reorderLeftover(rows,'b',null)),'acdb');
+assert.equal(ids(c.reorderLeftover(rows,'b','b')),'abcd');
+assert.equal(ids(rows),'abcd');assert.equal(c.reorderLeftover(rows,'a',null)[3],rows[0]);
+console.log('Reordering preserves settings and supports moving up, down, and to the end');

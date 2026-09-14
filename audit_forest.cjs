@@ -1,0 +1,17 @@
+const {chromium}=require('C:/Users/psamo/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');const fs=require('fs');
+(async()=>{const b=await chromium.launch({channel:'msedge',headless:true});try{const p=await b.newPage();await p.addInitScript(()=>localStorage.setItem('farm-workshop-v1',JSON.stringify({targets:{837:90000},secondary:['118','83','82','896','74','81','73','895','165','500','252','125','787','217','166','119'].map(item_id=>({item_id,cap:null,allow_exploration:['118','83','896'].includes(item_id)})),resource_saver:45,iron_depot:true,runecube:true,wanderer:33,lemon_squeezer:true,cinnamon:true,sprint_shoes:3,inventory_size:10000,craftworks_slots:20,route_method:'Cider',route_foods:{},selected_plan:1,max_areas:15})));
+await p.goto('http://127.0.0.1:8765/#explore',{waitUntil:'domcontentloaded'});
+await p.waitForFunction(()=>typeof items!=='undefined'&&Object.keys(items).length>0);
+// Resolve the last two item IDs against the catalog, then recompute.
+await p.evaluate(()=>{state.secondary=['Leather Diary','Purple Diary','Green Diary','Blue Diary','Green Parchment','White Parchment','Purple Parchment','Blue Parchment','Horn Canteen','Large Net','Treasure Chest','Aquamarine Ring','Acorn Butter','Horseshoe','Shimmer Ring','Coin Purse'].map(name=>({item_id:Object.values(items).find(i=>i.name===name).id,cap:null,allow_exploration:['Leather Diary','Purple Diary','Blue Diary'].includes(name)}));calculate();});
+await p.waitForFunction(()=>!document.querySelector('#resultContent').hidden&&!document.querySelector('#compute').disabled,{},{timeout:180000});
+let src=fs.readFileSync('web/route.js','utf8').replaceAll('inventoryRoute','auditRoute').replaceAll('explorationMenuOrder','auditMenuOrder');
+src=src.replace('const totals={...remaining}',`const audit={forestPeaks:{},forestEnd:{},firstForestEnd:{},globalPeak:{id:null,q:0}};let auditForest=false;function sample(){for(const [id,q] of Object.entries(stock)){if(free.has(id))continue;if(q>audit.globalPeak.q)audit.globalPeak={id,q};if(auditForest)audit.forestPeaks[id]=Math.max(audit.forestPeaks[id]||0,q);}};const totals={...remaining}`);
+src=src.replace('for(const [placeIndex,p] of parts.entries()){','for(const [placeIndex,p] of parts.entries()){auditForest=p.id===\'explore:7\';sample();');
+src=src.replace('p.left--;uses++;','sample();p.left--;uses++;');
+src=src.replace('remaining[id]-=count;crafts+=count;','remaining[id]-=count;crafts+=count;sample();');
+src=src.replace('if(!continuous&&activeGroups.some',"if(auditForest){audit.forestEnd={...stock};if(round===1)audit.firstForestEnd={...stock};}if(!continuous&&activeGroups.some");
+src=src.replace('return {capacity,method,','return {audit,capacity,method,');
+await p.addScriptTag({content:src});
+const output=await p.evaluate(()=>{const plan=result.plans[1],r=auditRoute(plan,items,catalog.locations,state);const top=obj=>Object.entries(obj).map(([id,q])=>({name:items[id]?.name,id,q})).sort((a,b)=>b.q-a.q).slice(0,12);return {total:plan.optimal_total_explores,secondary:state.secondary,rounds:r.rounds,complete:r.complete,problem:r.problem,forest:r.parts[0],peaks:top(r.audit.forestPeaks),firstEnd:top(r.audit.firstForestEnd),globalPeak:{...r.audit.globalPeak,name:items[r.audit.globalPeak.id]?.name},active:r.activeGroups[0].recipes.map(id=>items[id].name)};});fs.writeFileSync('../../work/forest-audit.json',JSON.stringify(output,null,2));console.log(JSON.stringify(output,null,2));
+}finally{await b.close();}})().catch(e=>{console.error(e);process.exit(1)});

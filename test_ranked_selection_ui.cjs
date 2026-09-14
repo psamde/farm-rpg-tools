@@ -1,0 +1,12 @@
+const {chromium}=require('C:/Users/psamo/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');const fs=require('fs');
+(async()=>{const b=await chromium.launch({channel:'msedge',headless:true});const p=await b.newPage({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
+await p.addInitScript(()=>!localStorage.getItem('farm-workshop-v1')&&localStorage.setItem('farm-workshop-v1',JSON.stringify({targets:{'837':90000},secondary:['118','83','82','896','74','81','73','895','248','165','500','252','1442','125','146','217','787'].map(item_id=>({item_id,allow_exploration:['118','83','896'].includes(item_id),cap:null})),resource_saver:45,iron_depot:true,runecube:true})));
+const result=fs.readFileSync('../../work/lantern-90001-result.json','utf8');await p.route('**/python-worker.js',r=>r.fulfill({contentType:'text/javascript',body:'onmessage=()=>postMessage({status:"complete",result:'+result+'});'}));
+await p.goto('http://127.0.0.1:8765/#explore');await p.locator('#resultContent').waitFor({state:'visible'});await p.locator('[data-plan="1"]').click();
+const assert=require('assert/strict');assert.equal(await p.locator('[data-plan="1"]').getAttribute('aria-pressed'),'true');
+await p.locator('#itemInput').fill('Iced Tea');await p.locator('#quantityInput').fill('100');await p.locator('#addForm button').click();await p.waitForFunction(()=>document.querySelector('#status').textContent.includes('distinct plans'));
+assert.equal(await p.locator('[data-plan="1"]').getAttribute('aria-pressed'),'true');
+await p.locator('.plansave summary').click();await p.locator('#generatePlanCode').click();const code=await p.locator('#planCode').inputValue();assert.equal(JSON.parse(Buffer.from(code.slice(4),'base64')).settings.selected_plan,1);
+await p.locator('#loadPlanCode').click();await p.locator('#resultContent').waitFor({state:'visible'});assert.equal(await p.locator('[data-plan="1"]').getAttribute('aria-pressed'),'true');
+for(const label of ['MINIMUM EXPLORES','MINIMUM AREAS','MIN TOTAL UNUSED MATERIALS','MIN UNUSED MATERIAL TYPES'])assert(await p.locator('.planbadge').filter({hasText:label}).count()>0);
+await p.locator('#planChoices').scrollIntoViewIfNeeded();await p.screenshot({path:'../../work/ranked-labels-mobile.png'});console.log('PASS mobile badges, add item preserves selection, save/load restores option 2');await b.close();})().catch(e=>{console.error(e);process.exit(1)});

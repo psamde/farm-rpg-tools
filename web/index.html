@@ -1,0 +1,97 @@
+<!doctype html>
+
+<html lang="en" data-theme="dark"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Exploration Planner · psam's FarmRPG Tools</title><meta name="description" content="Plan Farm RPG exploration across multiple crafting targets."><link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23133832'/%3E%3Cpath d='M8 23V9h16v4H12v3h10v4H12v3Z' fill='%23b8e681'/%3E%3C/svg%3E"><link rel="stylesheet" href="style.css?v=20260914-save-defaults-6"><script src="costs.js?v=20260914-save-defaults-6" defer></script><script src="route.js?v=20260914-save-defaults-6" defer></script><script src="suggestions.js?v=20260914-save-defaults-6" defer></script><script src="browser-api.js?v=20260914-save-defaults-6" defer></script><script src="app.js?v=20260914-save-defaults-6" defer></script><script src="item-info.js?v=20260914-save-defaults-6" defer></script><script src="saved-plans.js?v=20260914-saves-1" defer></script></head>
+
+<body>
+
+<header class="topbar"><a class="brand" href="#tools"><span class="mark">F</span> <span class="brandname">psam's FarmRPG Tools</span></a><nav aria-label="Tools"><a href="#tools">Tools</a><a href="#explore" class="active">Exploration Planner</a></nav><button id="themeToggle" type="button" class="themebutton">Light mode</button></header>
+
+<section id="toolsPage" hidden class="toolpage"><p class="eyebrow">YOUR TOOLBOX</p><h1>Make every explore count.</h1><a class="toolcard" href="#explore"><span class="toolicon">↗</span><h2>Exploration Planner</h2><p>Combine crafting goals, compare areas, and put unused materials to work.</p><strong>Open planner →</strong></a></section>
+
+<main id="plannerPage">
+
+<div class="pageheading"><div><p class="eyebrow">FARM RPG / EXPLORATION</p><h1>Exploration Planner</h1><p class="subtitle">Add a craft. Find a route. Put the leftovers to work. Maybe optimize the fun out of the game.</p></div><div class="headingcontrols"><div id="plannerMode" class="modebuttons" role="group" aria-label="Planner mode"><button type="button" data-planner-mode="goals" aria-pressed="true">Item goals</button><button type="button" data-planner-mode="passive" aria-pressed="false">Passive production</button></div><span id="catalogMeta" class="badge">Loading catalog…</span></div></div>
+
+<div id="status" class="plannerprogress panel" role="status" aria-live="polite" aria-atomic="true">Preparing your workspace…</div>
+<details class="plansave panel"><summary>Save / load plan</summary>
+<p class="hint">Keep named plans in this browser. Saves stay on this device and this site; clearing site data removes them. Use a code for a backup or another device.</p>
+<div class="savedplanfields"><div><label for="savedPlanList">Saved plans · most recent first</label><select id="savedPlanList"><option value="">No saved plans yet</option></select></div><div><label for="savedPlanName">Plan name</label><input id="savedPlanName" maxlength="100" placeholder="e.g. Lanterns and diaries"></div></div>
+<div class="saveactions"><button id="saveNamedPlan" class="primary" type="button">Save as new</button><button id="updateNamedPlan" type="button" disabled>Update selected</button><button id="loadNamedPlan" type="button" disabled>Load selected</button><button id="renameNamedPlan" type="button" disabled>Rename</button><button id="deleteNamedPlan" type="button" disabled>Delete</button></div><p id="savedPlanStatus" class="hint" role="status"></p>
+<details><summary>Transfer or back up with a code</summary><label for="planCode">Plan code</label><textarea id="planCode" rows="3" placeholder="Generate a code or paste one here" spellcheck="false"></textarea><div class="saveactions"><button id="generatePlanCode" type="button">Generate code</button><button id="copyPlanCode" type="button">Copy code</button><button id="loadPlanCode" type="button">Load code</button></div><p id="planCodeStatus" class="hint" role="status"></p></details></details>
+<section class="targetbar panel" aria-label="Planner inputs"><div id="primaryInputs"><div class="sectiontitle"><h2>Primary targets</h2><span id="targetCount" class="badge">0</span></div><p class="hint">Choose what you want to make or collect. Crafting goals count toward mastery, even if you use those crafts in another recipe. Collection goals count what you’ll have left, including your starting inventory.</p>
+
+<div class="targetbarcontent"><div id="targets"></div>
+
+<form id="addForm"><div class="itemfield"><label for="itemInput">Add an item</label><input id="itemInput" list="craftableItems" placeholder="Search crafts or raw exploration drops…" required autocomplete="off"><datalist id="craftableItems"></datalist></div><div class="addrow"><div><label for="quantityInput">Quantity</label><input id="quantityInput" type="number" min="1" max="100000000" step="1" value="1000" required></div><button class="primary" type="submit">+ Add target</button></div></form></div><details class="raw panel"><summary>Ingredients needed <span>if you craft every ingredient</span></summary><div id="rawMaterials"></div></details> </div><div id="passiveInputs" hidden><div class="sectiontitle"><h2>Passive production</h2><label>Production period <select id="productionInterval"><option value="60">Every hour</option><option value="10">Every 10 minutes · Hickory Omelette</option></select></label></div><p class="hint">Enter how much you produce each hour or every 10 minutes, then choose what to make with it. Changing the period keeps the amounts you entered.</p><div id="passiveInventoryHome"></div></div><section id="secondarySection" class="secondarysection" hidden><div class="sectiontitle"><h2>Explicitly use leftovers for</h2><span id="secondaryCount" class="badge"></span></div><p class="hint">Add crafts from Route Planner below, then set their priority and caps here. Items higher in this list get first choice of shared ingredients. Leave a cap blank to make as many as possible; caps include crafts used in other recipes. Allow extra exploring to gather missing ingredients, using your original leftovers to determine how much to make.</p><div id="secondaryRows"></div><p id="priorityStatus" class="prioritystatus" aria-live="polite"></p><section id="implicitCrafts" class="implicitcrafts"></section></section></section>
+
+<section id="routePanel" class="panel routepanel" hidden aria-label="Route"><div class="sectiontitle"><h2>ROUTE <span id="routeOption" class="badge"></span></h2><div class="routecontrols"><label>Inventory size <input id="inventorySize" type="number" min="1" max="1000000000" step="1" value="10000"></label><label>Use <select id="routeMethod"><option value="AP">Arnold Palmer</option><option value="Cider">Apple Cider</option></select></label><div id="routeFoods" class="routefoods"></div></div></div><p class="hint">Follow the locations in game order. The hammer icons show where to change Craftworks. Inventory size is the limit for each item.</p><p id="routeFoodNote" class="hint"></p><div id="routeCards" class="routecards"></div><p id="routeStatus" class="hint" aria-live="polite"></p><details id="craftworksDisclosure" class="craftworksdisclosure"><summary>Suggested Craftworks setup</summary><section id="craftworksSetup" class="craftworkssetup" aria-label="Suggested Craftworks setup"></section></details><details><summary>Collected items with no crafting use</summary><div id="nonCraftingDrops"></div></details></section>
+<div class="workspace"><aside class="setup panel" aria-label="Settings"><h2 class="settingsheading">SETTINGS</h2>
+
+<section class="settingsgroup"><h2>Crafting perks</h2>
+
+<label class="settingrow" for="ironDepot"><span data-setting-icon="Iron">Iron Depot<small>Free Iron and Nails</small></span><input class="switch" type="checkbox" id="ironDepot" role="switch"></label>
+
+<label class="settingrow hasnote" for="resourceSaver"><span data-setting-icon="Hammer">Resource Saver<small>Total bonus output</small></span><span class="numberunit"><input id="resourceSaver" type="number" min="0" max="45" step="1" value="0"><span>%</span></span></label>
+
+<p class="hint compact settingnote">I: 10% · II: 15% · III: 20%<br>Applied at every recipe level.</p></section>
+
+<section class="settingsgroup"><h2>Exploration perks</h2>
+
+<label class="settingrow" for="runecube"><span data-setting-icon="Runecube">Runecube<small>Use its exploration drop tables</small></span><input class="switch" type="checkbox" id="runecube" role="switch"></label>
+
+<label class="settingrow" for="wanderer"><span data-setting-icon="Leather Boots">Wanderer<small>Total stamina saving</small></span><span class="numberunit"><input id="wanderer" type="number" min="0" max="33" step="1" value="0"><span>%</span></span></label>
+
+<label class="settingrow" for="lemonSqueezer"><span data-setting-icon="Lemonade">Lemon Squeezer<small>More items from APs</small></span><input class="switch" id="lemonSqueezer" type="checkbox" role="switch"></label>
+
+<label class="settingrow" for="cinnamon"><span data-setting-icon="Apple Cider">Cinnamon Sticks<small>More explores per Cider</small></span><input class="switch" id="cinnamon" type="checkbox" role="switch"></label>
+
+<label class="settingrow" for="sprintShoes"><span data-setting-icon="Leather Boots">Sprint Shoes<small>Highest tier owned</small></span><select id="sprintShoes"><option value="0">None</option><option value="1">I</option><option value="2">II</option><option value="3">III</option></select></label>
+
+</section>
+
+<details class="settingsgroup effectivenessgroup"><summary>Exploration Effectiveness</summary><p class="hint compact">Set the number of upgrades in each area, including Protein Bars. Sprint Shoes apply automatically.</p><div class="effectivenesslegend"><span>Area</span><span>Upgrades</span><span>Explores / Cider ≈</span></div><div id="ciderSettings"></div></details>
+
+<section class="settingsgroup"><h2>Search options</h2>
+
+<label for="mode">Plans to include</label><select id="mode"><option value="best">Best plans</option><option value="combinations">Explore combinations</option></select><p id="modeHelp" class="hint compact"></p>
+
+<label for="maxAreas">Maximum areas per plan</label><select id="maxAreas"><option value="1">1 area</option><option value="2">2 areas</option><option value="3">3 areas</option><option value="4">4 areas</option><option value="15">All combinations (slower)</option></select>
+
+</section>
+
+<details class="settingsgroup"><summary>Performance experiments</summary><p class="hint">Compare the same plan with each option on or off. All options still check whole-number crafts and material balances.</p><label class="check"><input type="checkbox" id="cachePrimary">Reuse primary plans</label><label class="check"><input type="checkbox" id="reuseModels">Reuse solver models</label><label class="check"><input type="checkbox" id="fractionalStart">Try a fractional starting solution</label><p class="hint">Caching helps repeated runs and leftover edits. A new worker starts cold if you interrupt a running calculation. The fractional experiment still finishes with the integer solver.</p><button type="button" id="benchmarkAgain">Run again</button><p id="performanceResult" role="status" class="hint"></p></details>
+<details><summary>Available areas <span id="areaCount"></span></summary><p class="hint">Select the areas you can explore.</p><div class="smallactions"><button type="button" id="allAreas">Select all</button><button type="button" id="noAreas">Clear</button></div><div id="areaChoices"></div></details>
+
+<div id="startingInventoryHome"></div><details id="inventorySection"><summary><span id="inventoryLabel">Starting inventory</span> <span id="inventoryCount"></span></summary>
+
+<p class="hint">Enter what you have on hand, or your hourly or daily production. Common farm supplies are listed below; you can add other items too.</p>
+
+<p class="hint">The plan treats these supplies as ready to use. It doesn’t estimate how long crafting or exploring takes.</p>
+
+<div id="inventoryRows"></div>
+
+<form id="inventoryForm"><label for="inventoryItem">Add any other item</label><input id="inventoryItem" list="inventoryItems" placeholder="Search all items…" autocomplete="off" required><datalist id="inventoryItems"></datalist><div class="inventoryadd"><div><label for="inventoryQuantity">Quantity</label><input id="inventoryQuantity" type="number" min="0" max="1000000000000" step="1" value="0" required></div><button class="primary" type="submit">+ Add item</button></div><p id="inventoryError" role="alert" hidden></p></form>
+
+</details>
+
+<button class="primary compute" id="compute" type="button">Recalculate plans</button><p class="hint">Expected yields · Crafting perks included</p></aside>
+
+<section class="results" aria-label="Route planner"><div class="sectiontitle"><h2>ROUTE PLANNER</h2></div><div id="error" role="alert" hidden></div><div id="empty" class="empty panel"><span class="toolicon">↗</span><h2>Add a target to start.</h2><p>Your route and leftover materials will appear here.</p></div><div id="resultContent" hidden>
+
+<div class="summarygrid"><div class="metric"><span>LOWEST EXPLORES FOUND</span><strong id="totalExplores">—</strong><small>expected explores</small><small id="costPreview" class="costpreview"></small><small id="solverPrecision" class="costpreview" hidden></small></div><div class="metric"><span>COMPARED WITH PREVIOUS PLAN</span><strong id="delta">—</strong><small id="deltaCaption">Add another target to compare</small></div><div class="metric"><span>DISTINCT OPTIONS</span><strong id="optionCount">—</strong><small id="scope">—</small></div><div id="summaryCosts" class="summarycosts"></div></div>
+
+
+
+<div class="plansgrid"><section class="panel optionpanel"><div class="sectiontitle"><h2>Ranked plans</h2></div><div id="planChoices"></div></section></div>
+<details id="leftoverMaterials" class="leftovermaterials panel" open><summary>Choose materials to use in another craft</summary><div id="planDetail"></div></details>
+
+</div></section>
+
+</div><footer>Buddy’s Almanac data · Expected quantities, not guaranteed drops · Local calculations</footer>
+
+</main>
+
+<dialog id="consumerDialog" aria-labelledby="consumerTitle"><div class="sectiontitle"><div><p class="eyebrow">USE YOUR LEFTOVERS</p><h2 id="consumerTitle">Craft with this material</h2></div><button type="button" id="closeDialog" class="iconbutton" aria-label="Close suggestions">×</button></div><p class="hint">Choose a craft and we’ll work out how many you can make. Move it up the list to give it first choice of ingredients.</p><label for="consumerSearch">Find a craft</label><input id="consumerSearch" placeholder="Filter items…"><button type="button" id="suggestMaterial" class="primary">Suggest item</button><div id="consumerList"></div></dialog>
+
+<dialog id="modeSwitchDialog" aria-labelledby="modeSwitchTitle"><h2 id="modeSwitchTitle">Save this plan before switching?</h2><p class="hint">Switching mode starts a blank plan. Targets, leftover crafts, inventory, production amounts, routes and settings will reset. Your color theme stays the same.</p><div id="modeSaveCode" hidden><label for="modePlanCode">Current plan code</label><textarea id="modePlanCode" rows="4" readonly spellcheck="false"></textarea><p class="hint">Keep this code somewhere safe to restore the plan later.</p><button type="button" id="copyModeCode">Copy code</button><p id="modeSaveStatus" role="status" class="hint"></p></div><div class="saveactions"><button type="button" id="saveBeforeMode" class="primary">Save code first</button><button type="button" id="discardBeforeMode">Discard and switch</button><button type="button" id="cancelModeSwitch">Cancel</button></div></dialog><dialog id="suggestionsDialog" aria-labelledby="suggestionsTitle"><div class="sectiontitle"><h2 id="suggestionsTitle">Suggested items</h2><button type="button" id="closeSuggestions" class="iconbutton" aria-label="Close suggestions popup">×</button></div><div id="suggestionResults"></div></dialog></body></html>
+
