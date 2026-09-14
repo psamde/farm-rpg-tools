@@ -22,18 +22,16 @@ const oldCode=c.encodePlanCode({targets:{raw:200},areas:['area'],performance:{ca
 c.items.newItem={craftable:true};c.catalog.locations.push({id:'new-area'});
 const restored=c.decodePlanCode(oldCode);
 assert.equal(restored.targets.raw,200);assert.equal(Object.keys(restored.targets).length,1);
-assert.equal(restored.inventory_size,10000);assert.equal(restored.performance.cache_primary,true);
-assert.equal(restored.performance.reuse_models,false);assert.equal(restored.performance.fractional_start,false);
+assert.equal(restored.inventory_size,10000);assert.equal(restored.performance,undefined);
 // Simulate a future release adding settings and nested defaults.
-c.base.newSetting=42;c.base.performance.future_option=true;
+c.base.newSetting=42;c.base.future_settings={enabled:true};
 const future=c.decodePlanCode(oldCode);
-assert.equal(future.newSetting,42);assert.equal(future.performance.future_option,true);
-assert.equal(future.performance.cache_primary,true);
+assert.equal(future.newSetting,42);assert.equal(future.future_settings.enabled,true);
 const local=c.withSettingDefaults({targets:{},secondary:[],performance:{cache_primary:false}});
 assert.equal(Object.keys(local.targets).length,0);assert.equal(local.secondary.length,0);
-assert.equal(local.performance.cache_primary,false);assert.equal(local.performance.future_option,true);
-local.performance.future_option=false;assert.equal(c.base.performance.future_option,true);
-assert.throws(()=>c.decodePlanCode(c.encodePlanCode({targets:{raw:1},performance:{cache_primary:'yes'}})));
+assert.equal(local.performance,undefined);assert.equal(local.future_settings.enabled,true);
+local.future_settings.enabled=false;assert.equal(c.base.future_settings.enabled,true);
+assert.equal(c.decodePlanCode(c.encodePlanCode({targets:{raw:1},performance:{cache_primary:'yes'}})).performance,undefined);
 console.log('Old saves tolerate catalog additions and receive independent top-level/nested defaults; explicit choices and empty targets are preserved');
 
 const starter=c.starterPlan();assert.equal(starter.targets['126'],1000);assert.equal(starter.secondary.length,2);assert.equal(starter.secondary[0].allow_exploration,true);

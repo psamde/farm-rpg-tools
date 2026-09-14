@@ -7,7 +7,7 @@ from test_planner import small_catalog
 class PrimaryCacheTests(unittest.TestCase):
     def test_reuse_invalidation_and_isolation(self):
         catalog=small_catalog()
-        payload={'targets':{'Target':2},'areas':None,'max_areas':2,'performance':{'cache_primary':True}}
+        payload={'targets':{'Target':2},'areas':None,'max_areas':2}
         with patch('browser_engine.ranked_plans',wraps=browser_engine.ranked_plans) as ranked:
             first=browser_engine.compute(catalog,payload)
             original=deepcopy(first['plans'])
@@ -16,8 +16,8 @@ class PrimaryCacheTests(unittest.TestCase):
             self.assertEqual(second['plans'],original)
             self.assertTrue(second['performance']['primary_cache_hit'])
             self.assertEqual(ranked.call_count,1)
-            # Solver toggles don't change the primary problem.
-            browser_engine.compute(catalog,{**payload,'performance':{'cache_primary':True,'reuse_models':True}})
+            # Legacy saves cannot disable automatic caching.
+            browser_engine.compute(catalog,{**payload,'performance':{'cache_primary':False,'reuse_models':True}})
             self.assertEqual(ranked.call_count,1)
             for key,value in [('targets',{'Target':3}),('inventory',{'A':1}),('resource_saver',10),('max_areas',1)]:
                 result=browser_engine.compute(catalog,{**payload,key:value})

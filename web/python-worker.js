@@ -16,7 +16,7 @@ async function initialize(){
 self.onmessage=async({data})=>{try{
  self.postMessage({status:'running',message:'Loading Python and SciPy in your browser...'});
  const py=await (runtime??=initialize());
- experiments.configure(data.performance);
+ experiments.configure({});
  py.globals.set('payload_json',JSON.stringify(data));
  let comparing=false;
  py.globals.set('report_progress',(done,total)=>{if(!comparing)self.postMessage({status:'running',done,total,message:'Calculating on your device...'});});

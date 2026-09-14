@@ -14,9 +14,8 @@ def compute(catalog, payload, progress=lambda done,total: None, deferred=None):
     if _CACHE_CATALOG is not catalog:
         _PRIMARY_CACHE.clear()
         _CACHE_CATALOG = catalog
-    opts = payload.get('performance', {})
     key = json.dumps({k: payload.get(k) for k in ('planner_mode','targets','areas','inventory','iron_depot','runecube','resource_saver','max_areas','combinations_mode')}, sort_keys=True)
-    hit = bool(opts.get('cache_primary') and key in _PRIMARY_CACHE)
+    hit = key in _PRIMARY_CACHE
     common = dict(areas=payload['areas'], inventory=payload.get('inventory', {}),
                   iron_depot=payload.get('iron_depot', False), runecube=payload.get('runecube', False),
                   resource_saver=payload.get('resource_saver', 0))
@@ -29,10 +28,9 @@ def compute(catalog, payload, progress=lambda done,total: None, deferred=None):
         else:
             result = ranked_plans(catalog, payload['targets'], max_areas=payload.get('max_areas', 3),
                                   combinations_mode=payload.get('combinations_mode', False), progress=progress, **common)
-        if opts.get('cache_primary'):
-            _PRIMARY_CACHE[key] = deepcopy(result)
-            while len(_PRIMARY_CACHE) > 4:
-                _PRIMARY_CACHE.popitem(last=False)
+        _PRIMARY_CACHE[key] = deepcopy(result)
+        while len(_PRIMARY_CACHE) > 4:
+            _PRIMARY_CACHE.popitem(last=False)
     if payload.get('planner_mode') == 'passive':
         result['production_interval'] = payload.get('production_interval',60)
     progress(0, None)
