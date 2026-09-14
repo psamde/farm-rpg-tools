@@ -1,6 +1,6 @@
 """Shared-pool allocation and joint exploration/crafting optimization.
 
-Credit originates only in the primary plan's surplus. Continuous credit flows
+Credit originates in a frozen supply snapshot. Continuous credit flows
 through the recipe DAG, with capacity proportional to actual ingredient use.
 Each selected craft maximizes its input credit in priority order. Exploration
 then minimizes the cost of that allocation; new drops never create credit.
@@ -41,6 +41,55 @@ def validate_secondary(catalog, rows):
 
 def consume_leftovers(catalog, primary, requested, areas=None, max_areas=15, progress=None, defer_comparison=None):
     goals = validate_secondary(catalog, requested)
+    if not any(g['allow_exploration'] and g.get('exploration_item_id') for g in goals):
+        return _consume_leftovers(catalog, primary, goals, areas, max_areas, progress, defer_comparison)
+    # Each row gets one snapshot of the route established by higher priorities.
+    # Rebuild from the primary inputs each time; snapshots are credit budgets,
+    # never additional physical inventory. Earlier craft quantities stay met.
+    previous = primary
+    metadata = {}
+    for index, goal in enumerate(goals):
+        minimum = {t['item_id']:t['crafts'] for t in previous.get('secondary', {}).get('crafts_in_dependency_order', [])}
+        pool = {b['item_id']:max(0, b['expected_final_inventory']-b['reserved_target_output'])
+                for b in previous['item_balances']}
+        previous = _consume_leftovers(catalog, primary, goals[:index+1], areas, max_areas, progress,
+            _minimum=minimum, _pool=pool, _reference=previous, _current=goal['item_id'])
+        row = previous['secondary']['targets'][-1]
+        metadata[goal['item_id']] = deepcopy(row)
+    for row in previous['secondary']['targets']:
+        saved = metadata[row['item_id']]
+        for key in ('exploration_ingredient', 'pool_credit_used', 'pool_credit_if_first'):
+            if key in saved: row[key] = saved[key]
+        row['if_first'] = row['crafts']
+        row['lost_to_priority'] = False
+    previous['model'] = 'shared route supplies; freeze each ingredient before its extra exploration'
+    previous['secondary']['semantics'] = 'Use shared supplies in priority order. Freeze each chosen ingredient before that craft adds exploration; preserve earlier craft quantities.'
+    previous['secondary']['route_reoptimized'] = any(g['allow_exploration'] for g in goals)
+    previous['solver']['scope'] = 'shared route supplies; ingredient budgets frozen once per priority'
+    previous['secondary']['priority_matters'] = False
+    for goal, row in zip(goals, previous['secondary']['targets']):
+        def compare(goal=goal, row=row):
+            try:
+                first = _consume_leftovers(catalog, primary, [goal], areas, max_areas, progress)
+                count = first['secondary']['targets'][0]['crafts']
+                row['if_first'] = max(row['crafts'], count)
+                row['lost_to_priority'] = count > row['crafts']
+                row['comparison_status'] = 'complete'
+            except ValueError:
+                row['comparison_status'] = 'unavailable'
+            previous['secondary']['priority_matters'] = any(t['lost_to_priority'] for t in previous['secondary']['targets'])
+        if defer_comparison is not None:
+            row['if_first'] = None
+            row['comparison_status'] = 'pending'
+            defer_comparison(compare)
+        else:
+            compare()
+    return previous
+
+
+def _consume_leftovers(catalog, primary, requested, areas=None, max_areas=15, progress=None, defer_comparison=None,
+                       *, _minimum=None, _pool=None, _reference=None, _current=None):
+    goals = validate_secondary(catalog, requested)
     if not goals:
         return primary
     import numpy as np
@@ -51,9 +100,13 @@ def consume_leftovers(catalog, primary, requested, areas=None, max_areas=15, pro
     stock = Counter({r['item_id']: r['starting_inventory'] + r.get('required_external_supply', 0) for r in primary['item_balances']})
     pool = {r['item_id']: r['expected_unused'] for r in primary['item_balances']
             if r['expected_unused'] > 1e-8 and r['item_id'] not in free}
+    if _pool is not None:
+        pool = {ref:q for ref,q in _pool.items() if q > 1e-8 and ref not in free}
+    minimum = _minimum or {}
+    reference = _reference or primary
     reserve = Counter({r['item_id']: r['reserved_target_output'] for r in primary['item_balances']})
     primary_goals = {r['item_id']: r['craft_quantity'] for r in primary['targets']}
-    assisted = any(g['allow_exploration'] for g in goals)
+    assisted = any(g['allow_exploration'] for g in goals if _current is None or g['item_id'] == _current)
 
     def graph(roots):
         order, seen, active = [], set(), set()
@@ -110,6 +163,10 @@ def consume_leftovers(catalog, primary, requested, areas=None, max_areas=15, pro
     for g in goals:
         desired[g['item_id']] = sum(math.ceil(amount / need) for ref, amount in pool.items()
                                     if (need := ingredient_amount(g['item_id'], ref)) > 0)
+    if _current is not None:
+        desired[_current] += minimum.get(_current, 0)
+    for ref, count in minimum.items():
+        desired[ref] = max(desired.get(ref, 0), count)
     def craft_bounds(order, targets):
         needs, bounds = Counter(), {}
         for ref in reversed(order):
@@ -123,9 +180,9 @@ def consume_leftovers(catalog, primary, requested, areas=None, max_areas=15, pro
         if goal['cap'] is not None:
             c_bounds[goal['item_id']] = min(c_bounds[goal['item_id']],goal['cap'])
     p_bounds = craft_bounds(p_order, primary_goals)
-    original_p = {r['item_id']: r['crafts'] for r in primary['crafts_in_dependency_order']}
+    original_p = {r['item_id']: r['crafts'] for r in reference['crafts_in_dependency_order']}
     # Keep the existing route precisely when exploration assistance is off.
-    original_e = {a['location_id']: a['explores'] for a in primary['areas']}
+    original_e = {a['location_id']: a['explores'] for a in reference['areas']}
     locations = {i: r for i, r in catalog['locations'].items() if r['kind'] == 'explore'}
     allowed = {resolve(locations, a) for a in areas} if areas is not None else set(locations)
     if not assisted:
@@ -153,7 +210,7 @@ def consume_leftovers(catalog, primary, requested, areas=None, max_areas=15, pro
         return i
     P = {ref: variable(primary_goals.get(ref, 0) if assisted else original_p.get(ref, 0),
                         p_bounds[ref] if assisted else original_p.get(ref, 0), True) for ref in p_order}
-    C = {ref: variable(hi=c_bounds[ref], whole=True) for ref in c_order}
+    C = {ref: variable(lo=minimum.get(ref, 0), hi=c_bounds[ref], whole=True) for ref in c_order}
     N = {ref: variable(hi=c_bounds[ref], whole=True) for ref in c_order}
     E, Y = {}, {}
     total_need = Counter(reserve)
@@ -209,17 +266,17 @@ def consume_leftovers(catalog, primary, requested, areas=None, max_areas=15, pro
             rule({N[craft]: (items[craft]['output_quantity'] if craft == ref else 0) - items[craft]['direct_ingredients'].get(ref, 0) * factor
                   for craft in c_order}, lo=-pool.get(ref, 0))
     for ref in c_order:
-        rule({N[ref]: 1, C[ref]: -1}, hi=0)
+        rule({N[ref]: 1, C[ref]: -1}, hi=-minimum.get(ref, 0))
     no_extra = {g['item_id'] for g in goals if not g['allow_exploration']}
     if not anchored:
         for (craft, child), col in F.items():
             quantity = items[craft]['direct_ingredients'][child] * factor * density[child]
-            rule({col: 1, (N if craft in no_extra else C)[craft]: -quantity}, hi=0)
+            rule({col: 1, (N if craft in no_extra else C)[craft]: -quantity}, hi=0 if craft in no_extra else -quantity*minimum.get(craft, 0))
         for ref in c_order:
             terms = {G[ref]: 1}
             terms.update({col: -1 for (craft, _), col in F.items() if craft == ref})
             rule(terms, lo=0, hi=0)
-            rule({G[ref]: 1, C[ref]: -items[ref]['output_quantity'] * density[ref]}, hi=0)
+            rule({G[ref]: 1, C[ref]: -items[ref]['output_quantity'] * density[ref]}, hi=-items[ref]['output_quantity']*density[ref]*minimum.get(ref, 0))
         for ref in sorted(c_refs):
             terms = {col: 1 for (_, child), col in F.items() if child == ref}
             if ref in S: terms[S[ref]] = -1
@@ -228,7 +285,7 @@ def consume_leftovers(catalog, primary, requested, areas=None, max_areas=15, pro
     else:
         for (origin, craft, child), col in F.items():
             quantity = items[craft]['direct_ingredients'][child] * factor * origin_density[origin][child]
-            rule({col: 1, (N if craft in no_extra else C)[craft]: -quantity}, hi=0)
+            rule({col: 1, (N if craft in no_extra else C)[craft]: -quantity}, hi=0 if craft in no_extra else -quantity*minimum.get(craft, 0))
         for (origin, ref), col in G.items():
             terms = {col: 1}
             terms.update({edge: -1 for (o, craft, _), edge in F.items() if o == origin and craft == ref})
@@ -290,6 +347,9 @@ def consume_leftovers(catalog, primary, requested, areas=None, max_areas=15, pro
     pending_comparisons = []
     for goal in goals:
         ref = goal['item_id']
+        if _current is not None and ref != _current:
+            maxima.append(0); credits.append(0); if_first.append(None)
+            continue
         if anchored:
             anchor = goal.get('exploration_item_id') if goal['allow_exploration'] else None
             def through_anchor(origin, child):
@@ -302,7 +362,7 @@ def consume_leftovers(catalog, primary, requested, areas=None, max_areas=15, pro
             reward = objective(col for (craft, _), col in F.items() if craft == ref)
         alone = solve(-reward)
         best = float(reward @ alone.x)
-        ranked = solve(-reward, locked)
+        ranked = solve(-reward, locked) if locked else alone
         value = float(reward @ ranked.x)
         # Keep the credit optimum, with only numerical tolerance; crafting and
         # area quantities themselves remain integer.

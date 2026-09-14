@@ -8,6 +8,50 @@ from test_planner import small_catalog
 
 
 class SecondaryTests(unittest.TestCase):
+    def test_earlier_intermediate_crafts_do_not_spend_new_pool_twice(self):
+        c, _ = self.fixture()
+        c['items']['5']['direct_ingredients'] = {'1':1,'2':1}
+        c['items']['6']['direct_ingredients'] = {'5':1}
+        p = plan(c,'Target',1,inventory={'A':21,'B':11})
+        result = consume_leftovers(c,p,[
+            {'item_id':'6','allow_exploration':True,'exploration_item_id':'2','cap':10},
+            {'item_id':'5','allow_exploration':True,'exploration_item_id':'1'}])
+        self.assertEqual([t['crafts'] for t in result['secondary']['targets']], [10,20])
+        self.assertEqual(result['optimal_total_explores'],17)
+        self.assert_balanced(result)
+
+    def test_later_craft_uses_new_drops_but_does_not_feed_back(self):
+        c = small_catalog()
+        c['items']['3']['direct_ingredients'] = {'1':1}
+        for ref, name, ingredients in [('5','First',{'4':1,'2':1}), ('6','Second',{'8':1,'9':1}), ('8','Y',{}), ('9','Z',{})]:
+            c['items'][ref] = dict(id=ref,name=name,craftable=bool(ingredients),direct_ingredients=ingredients,output_quantity=1)
+        c['sources'] = {}
+        for area,drops in [('a',{'1':1,'4':1}),('b',{'2':1,'8':1}),('joint',{'9':1,'8':1})]:
+            for ref,rate in drops.items():
+                c['sources'][area+ref] = dict(kind='explore',location_id=area,item_id=ref,expected_drops_per_explore=rate,conditions={})
+        p = plan(c,'Target',10)
+        goals = [{'item_id':'5','allow_exploration':True,'exploration_item_id':'4'},
+                 {'item_id':'6','allow_exploration':True,'exploration_item_id':'8'}]
+        result = consume_leftovers(c,p,goals)
+        self.assertEqual([t['crafts'] for t in result['secondary']['targets']], [10,10])
+        self.assertEqual(result['optimal_total_explores'],30)
+        second = result['secondary']['targets'][1]
+        self.assertEqual(second['exploration_ingredient']['available'],10)
+        self.assertEqual(next(b for b in result['item_balances'] if b['item_id']=='8')['expected_unused'],10)
+        self.assert_balanced(result)
+        goals[1]['cap'] = 3
+        capped = consume_leftovers(c,p,goals)
+        self.assertEqual([t['crafts'] for t in capped['secondary']['targets']], [10,3])
+        self.assertEqual(capped['optimal_total_explores'],23)
+        self.assert_balanced(capped)
+        # A leftovers-only craft also sees drops from an earlier assisted row.
+        c['items']['6']['direct_ingredients'] = {'8':1}
+        goals[1] = {'item_id':'6','allow_exploration':False}
+        fixed = consume_leftovers(c,p,goals)
+        self.assertEqual(fixed['optimal_total_explores'],20)
+        self.assertEqual(fixed['secondary']['targets'][1]['crafts'],10)
+        self.assert_balanced(fixed)
+
     def test_selected_ingredient_controls_extra_exploration(self):
         c, _ = self.fixture()
         c['items']['6']['direct_ingredients'] = {'1': 1, '2': 1}

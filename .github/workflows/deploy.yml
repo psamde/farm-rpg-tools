@@ -37,3 +37,4 @@ jobs:
           node test_bottle_wasm.cjs
           node test_bottle_wasm.cjs test_anchored_plan.json
           node test_bottle_wasm.cjs test_anchored_plan.json --net-off
+          node test_bottle_wasm.cjs test_shared_pool_plan.json

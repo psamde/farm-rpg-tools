@@ -23,7 +23,14 @@ json.dumps(compute(json.loads(catalog_json), json.loads(payload_json), deferred=
 `));
   assert(result.plans.length);
   for (const plan of result.plans) {
-    assert(plan.optimal_total_explores < 40_000_000);
+    const sharedPoolCase = (process.argv[2] || '').includes('shared_pool');
+    assert(plan.optimal_total_explores < (sharedPoolCase ? 60_000_000 : 40_000_000));
+    if (sharedPoolCase) {
+      const ring = plan.secondary.targets.find(t => t.item_id === '125');
+      assert(ring.crafts > 400_000);
+      assert(ring.exploration_ingredient.available > 270_000);
+      assert(plan.item_balances.find(b => b.item_id === '41').expected_unused < 10);
+    }
     assert.equal(plan.targets[0].craft_quantity, 90_000);
     const bottle = plan.item_balances.find(b => b.item_id === '117');
     assert(bottle.consumed_by_crafting > 40_000);

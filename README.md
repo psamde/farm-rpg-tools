@@ -36,9 +36,10 @@ Open **http://127.0.0.1:8765** and leave the terminal running. Press Ctrl+C to s
 - Add target items and craft quantities; edit or remove them to recompute.
 - Pick a ranked plan to see its per-area used/unused items.
 - Click an unused material, select a consuming recipe, and add its desired quantity.
-- For extra exploration, choose the ingredient to use up. Its original supply
-  (including what can be crafted from original leftovers) determines the goal;
-  new drops do not increase that exploration goal. Priorities and optional caps
+- For extra exploration, choose the ingredient to use up. Its supply in the shared pool after higher-priority crafts
+  (including items produced by their exploration) determines the goal. That
+  quantity is frozen before this craft adds exploration, so its own new drops
+  cannot repeatedly increase the goal. Priorities and optional caps
   still apply. Older saves ask for this ingredient before enabling extra exploring.
 - All goals are optimized jointly. Predicted leftovers are never silently treated as starting inventory.
 - The comparison metric shows the change in the cheapest plan vs the previous successful target list, only when settings and starting inventory are unchanged. It compares the cheapest options, not a previously selected slower route.
@@ -266,17 +267,17 @@ Conversion model: effectiveness=(1+upgrades)*2^shoeTier; Cider capacity=(1000+10
 
 
 ## Use leftovers for (web app)
-Items added from any material row become ordered secondary targets beneath the explicit primary goals. Quantities are automatic. Enable **Allow extra exploring** on a target to fill missing ingredients and optimize the entire exploration route. Optional per-item caps limit credited secondary crafts, including intermediate crafts and the final surplus pass. Leave a cap blank for automatic quantities; zero disables that secondary craft. Primary goals are protected. Limiting-material selectors are no longer used.
+Items added from a material row become ordered secondary targets below the primary goals. Enable **Explore for missing ingredients** and choose **Use up** to select the ingredient that limits extra exploration. Optional caps include intermediate crafts and the final surplus pass; zero disables a craft.
 
-The original leftover pool is the surplus from each primary-only route. The shared matrix solver assigns finite credit to those supplies and passes that credit through recipe dependencies. Material conservation and ingredient-capacity constraints prevent duplication across competing crafts. Credit can pass from Feathers through White Parchment into Purple Diary, so intermediate mastery can count at both stages. Newly explored items cannot create more credit. Recipe quantities, whole crafts, expected Resource Saver output, inventory and free Iron/Nails remain part of the material model.
+The planner processes these rows in priority order. Each row sees the shared supplies left by the route and crafts above it, including their exploration drops and finished intermediates. It freezes that supply snapshot before adding exploration for the current row. Earlier craft quantities remain protected, and the material model always rebuilds from the actual starting inventory and total exploration: snapshot supplies are not added as free inventory.
 
-The optimization maximizes each selected recipe's use of original-leftover credit in priority order, then minimizes explores, then crafting work. It maximizes utilization of original supplies, not unlimited output or market value. Pool credit is normalized by original supply; intermediate capacity derives from its recipe. A separate material ledger checks that targets without exploration assistance can be supported by the original pool. Additional intermediate crafts may still be needed by an assisted downstream recipe. With assistance, all checked areas compete and the maximum area count applies to the full route. With assistance off everywhere, the primary route stays fixed.
+The solver maximizes use of the chosen ingredient, minimizes explores for that fixed goal, and then minimizes crafting work. A craft's own new drops cannot repeatedly expand its exploration goal. They can still support additional crafts without extra exploration and enter the shared pool for subsequent rows. Leftovers-only rows use the established route without adding explores. Whole crafts, Resource Saver, inventory, free Iron/Nails, and the area limit remain part of the model.
 
-Primary requested crafts and their reserved outputs are protected. Results retain fully consumed material rows and include gross **Used by leftover craft** quantities. Missing ingredients are shown only for zero-output targets. Crafts with no relevant original leftovers receive no reward; add them as explicit primary goals instead. Priority warnings compare attainable pool utilization with and without earlier selections, with an if-first craft quantity for the minimum-explore alternative.
+Primary outputs remain reserved. Fully consumed material rows remain visible. Background "if first" comparisons calculate a craft as the first leftover target against the primary plan; later positions may have more supplies because earlier rows expanded the route.
 
 Each original primary option supplies its own reference pool, so rerouted options can have different secondary quantities. They are ranked by total explores and exact duplicate area/count results are merged. These are expected-yield plans, not guaranteed stochastic outcomes or timed Craftworks schedules.
 
-API: `POST /api/plan` accepts `secondary: [{item_id: string, allow_exploration: boolean, cap: integer | null}, ...]`. Results use `secondary.schema_version = "2.0.0"`. `GET /api/catalog` includes `planner_api_version = 2`; the UI detects an outdated server and requests a restart rather than submitting incompatible requests.
+API: `POST /api/plan` accepts `secondary: [{item_id: string, allow_exploration: boolean, cap: integer | null, exploration_item_id?: string | null}, ...]`. Results use `secondary.schema_version = "2.0.0"`. `GET /api/catalog` includes `planner_api_version = 2`; the UI detects an outdated server and requests a restart rather than submitting incompatible requests.
 
 Checks: `python -m unittest discover -q`, `node test_secondary_ui.cjs`, and `node test_costs.cjs`. Regression coverage includes the real 30,000-necklace/parchment/Diary chain in both priority orders; full route replacement; shared-resource competition; imbalanced stock; inaccessible areas; area limits; existing intermediates; free supplies; and material conservation.
 
