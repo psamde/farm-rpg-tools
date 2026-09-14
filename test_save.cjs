@@ -35,3 +35,8 @@ assert.equal(local.performance.cache_primary,false);assert.equal(local.performan
 local.performance.future_option=false;assert.equal(c.base.performance.future_option,true);
 assert.throws(()=>c.decodePlanCode(c.encodePlanCode({targets:{raw:1},performance:{cache_primary:'yes'}})));
 console.log('Old saves tolerate catalog additions and receive independent top-level/nested defaults; explicit choices and empty targets are preserved');
+
+const starter=c.starterPlan();assert.equal(starter.targets['126'],1000);assert.equal(starter.secondary.length,2);assert.equal(starter.secondary[0].allow_exploration,true);
+assert.equal(c.withSettingDefaults({targets:{raw:7},secondary:[]}).secondary.length,0);
+assert.equal(c.withSettingDefaults({targets:{raw:7},secondary:[]}).targets.raw,7);
+console.log('First-run example is independent of saved plans and migration defaults');
