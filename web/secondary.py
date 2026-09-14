@@ -82,7 +82,9 @@ def consume_leftovers(catalog, primary, requested, areas=None, max_areas=15, pro
             density[ref] = credit_scale / pool[ref] if ref in pool else 0
     for ref in c_order:
         inherited = sum(q * factor * density[child] for child, q in items[ref]['direct_ingredients'].items()) / items[ref]['output_quantity']
-        density[ref] = max(inherited, credit_scale / pool[ref] if ref in pool else 0)
+        # A fractional leftover intermediate must not inflate the credit
+        # capacity of every newly crafted unit of that item.
+        density[ref] = inherited if inherited > 0 else (credit_scale / pool[ref] if ref in pool else 0)
     for ref in free:
         density[ref] = 0
 

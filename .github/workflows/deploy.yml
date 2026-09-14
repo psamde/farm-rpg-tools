@@ -32,3 +32,5 @@ jobs:
           node test_suggestions.cjs
       - name: Build static site
         run: python build_static.py
+      - name: Check leftover allocation in WebAssembly
+        run: node test_bottle_wasm.cjs

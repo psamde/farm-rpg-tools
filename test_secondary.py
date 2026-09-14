@@ -1,4 +1,6 @@
 import copy
+import json
+from pathlib import Path
 import unittest
 from planner import plan
 from secondary import consume_leftovers, validate_secondary
@@ -6,6 +8,21 @@ from test_planner import small_catalog
 
 
 class SecondaryTests(unittest.TestCase):
+    def test_fractional_bottle_surplus_does_not_reward_overproduction(self):
+        from browser_engine import compute
+        root = Path(__file__).parent
+        catalog = json.loads((root / 'data/catalog.json').read_text(encoding='utf-8'))
+        payload = json.loads((root / 'test_bottle_plan.json').read_text(encoding='utf-8'))
+        result = compute(catalog, payload, deferred=[])
+        self.assertTrue(result['plans'])
+        for option in result['plans']:
+            self.assert_balanced(option)
+            self.assertLess(option['optimal_total_explores'], 40_000_000)
+            bottle = next(b for b in option['item_balances'] if b['item_id'] == '117')
+            self.assertGreater(bottle['consumed_by_crafting'], 40_000)
+            self.assertLess(bottle['expected_unused'], 1)
+            self.assertEqual(option['targets'][0]['craft_quantity'], 90_000)
+
     def fixture(self, shared=True):
         c = small_catalog()
         for ref, name, ingredients in [('5', 'First', {'1': 1}), ('6', 'Second', {'1' if shared else '2': 2})]:
