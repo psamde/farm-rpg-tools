@@ -270,3 +270,5 @@ body.reordering,body.reordering *{cursor:grabbing!important;user-select:none!imp
  .routegroupbadge{min-height:44px}
 }
 @media(pointer:coarse){.secondaryrow .prioritycontrols .draghandle{display:none}}
+
+.appversion{display:inline-block;vertical-align:middle;font-size:.38em;font-weight:600;line-height:1.5;letter-spacing:0;padding:.1em .5em;margin-left:.35em;border:1px solid currentColor;border-radius:.4em;opacity:.7;white-space:nowrap}
