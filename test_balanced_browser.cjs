@@ -16,7 +16,7 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE || 'playwright');
     targets:result.plans[selected].secondary.targets.map(r=>({id:r.item_id,n:r.crafts})),
     scope:result.plans[selected].model,performance:result.performance,
     rows:document.querySelectorAll('.secondaryrow').length}));
-  assert.equal(snapshot.version,'v0.1.3');
+  assert.equal(snapshot.version,'v'+fs.readFileSync('VERSION','utf8').trim());
   assert(snapshot.scope.includes('balanced'));
   for(const id of ['500','118','83','82','896','125'])assert(snapshot.targets.find(t=>t.id===id).n>1000,id);
   assert.equal(snapshot.rows,p.secondary.length);

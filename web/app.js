@@ -25,7 +25,7 @@ function theme(){document.documentElement.dataset.theme=state.theme;$('themeTogg
 
 $('themeToggle').onclick=()=>{state.theme=state.theme==='dark'?'light':'dark';theme();save();};
 
-for(const [id,key] of [['resourceSaver','resource_saver'],['wanderer','wanderer']])$(id).onchange=()=>{if(!$(id).reportValidity())return;state[key]=Number($(id).value);if(key==='resource_saver')changed();else{save();refreshCosts();}};
+for(const [id,key] of [['resourceSaver','resource_saver'],['wanderer','wanderer']])$(id).oninput=$(id).onchange=()=>{if($(id).value===''||!$(id).checkValidity())return;const value=Number($(id).value);if(state[key]===value)return;state[key]=value;if(key==='resource_saver')changed();else{save();refreshCosts();}};
 
 for(const [id,key] of [['lemonSqueezer','lemon_squeezer'],['cinnamon','cinnamon']])$(id).onchange=()=>{state[key]=$(id).checked;save();refreshCosts();};
 

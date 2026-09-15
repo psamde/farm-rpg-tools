@@ -98,5 +98,35 @@ class BalancedTests(unittest.TestCase):
             counts.append(values['500']); self.balanced(r)
         self.assertGreater(counts[1],counts[0])
 
+    def test_focus_stock_respects_shared_ingredients(self):
+        c,_=self.fixture()
+        c['items']['5']['direct_ingredients']={'1':3}
+        c['items']['6']['direct_ingredients']={'5':1,'1':1}
+        c['items']['7']['direct_ingredients']={'6':1,'2':1}
+        p=plan(c,'Target',1,inventory={'1':11,'5':4})
+        r=consume_leftovers(c,p,[{'item_id':'7','allow_exploration':True,'exploration_item_id':'6'}])
+        # Four stored intermediates consume four raw A in the focus recipe;
+        # the remaining six A make 1.5 more focus items, not 2.5.
+        self.assertAlmostEqual(r['secondary']['exploration_reference_crafts']['7'],5.5)
+        self.balanced(r)
+
+    def test_purple_bag_stored_bottles_and_perks(self):
+        from browser_engine import compute
+        c=json.loads(Path('data/catalog.json').read_text(encoding='utf8'))
+        payload=json.loads(Path('test_purple_bag_plan.json').read_text(encoding='utf8'))
+        results=[]
+        for saver,rune in [(0,False),(45,False),(0,True),(45,True)]:
+            result=compute(c,{**payload,'resource_saver':saver,'runecube':rune},deferred=[])
+            self.assertFalse(result['performance']['primary_cache_hit'])
+            r=result['plans'][0]; results.append(r); self.balanced(r)
+            bag=next(t for t in r['secondary']['targets'] if t['item_id']=='539')
+            self.assertGreaterEqual(bag['crafts'],9990)
+            self.assertAlmostEqual(r['secondary']['exploration_reference_crafts']['539'],20000*(1+saver/100)**2)
+        bag_counts=[next(t['crafts'] for t in r['secondary']['targets'] if t['item_id']=='539') for r in results]
+        self.assertGreater(bag_counts[1],bag_counts[0]*2)
+        self.assertNotEqual(results[0]['optimal_total_explores'],results[2]['optimal_total_explores'])
+        # Resource Saver changes crafting, not the collection rate of Ant Apples.
+        self.assertEqual(results[0]['secondary']['primary_explores'],results[1]['secondary']['primary_explores'])
+
 
 if __name__=='__main__': unittest.main()

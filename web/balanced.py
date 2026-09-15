@@ -99,12 +99,24 @@ def consume(catalog, primary, goals, areas=None, max_areas=15, progress=None):
             out[child]+=q*factor
             for raw,need in ingredients(child).items(): out[raw]+=q*factor*need/items[child]['output_quantity']
         return out
+    @lru_cache(None)
     def available(r):
         if r in free: return 0
         if not items[r]['craftable']: return pool[r]
-        needs=ingredients(r)
-        raw=[pool[k]/q for k,q in needs.items() if not items[k]['craftable'] and q>0]
-        return pool[r]+(min(raw)*items[r]['output_quantity'] if raw else 0)
+        # Maximize retained focus material using the actual stock ledger.
+        # Flattening to raw ingredients loses existing bottles/leather/etc;
+        # independently expanding branches can also spend shared stock twice.
+        stock_high=high.copy()
+        for col in E.values(): stock_high[col]=0
+        for cols in Z.values():
+            for col in cols: stock_high[col]=0
+        net=matrix[refs.index(r)].copy()
+        for col in E.values(): net[col]=0
+        try: x=solve(-net,bounds=Bounds(low,stock_high))
+        except ValueError as error:
+            if 'unbounded' not in str(error).lower(): raise
+            return 0
+        return max(0,pool[r]+float(net@x))
     def solve(objective, extra=(), bounds=None):
         if progress: progress()
         r=milp(objective,integrality=np.zeros(n),bounds=bounds or Bounds(low,high),
