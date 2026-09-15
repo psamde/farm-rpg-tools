@@ -276,3 +276,59 @@ body.reordering,body.reordering *{cursor:grabbing!important;user-select:none!imp
 .secondaryexplore{display:flex;flex-direction:column;gap:6px;min-width:0}.anchorchoice{display:flex;align-items:center;gap:6px;font-size:.8rem}.anchorchoice select{min-width:0;width:100%;max-width:230px;padding:6px}.anchorhint{grid-column:1/-1}.anchorhint .hint{margin:0}.anchorhint .itemicon{width:18px;height:18px}
 
 .secondaryexplore .check,.secondaryexplore .anchorchoice{margin:0}.anchorhint .gameicon{width:18px;height:18px}
+/* Leftover editor: one predictable row on desktop, a compact card on phones. */
+#secondaryRows{display:grid;gap:12px}
+#secondaryRows .leftover-card{display:grid;grid-template-columns:70px minmax(180px,1fr) 120px 140px 36px;gap:12px 16px;align-items:center;margin:0;padding:16px;border:1px solid var(--line);border-radius:12px;position:relative}
+.leftover-card label{margin:0;font-size:12px;color:var(--muted)}
+.leftover-name{grid-column:2;grid-row:1;display:flex;flex-wrap:wrap;align-items:center;gap:6px;min-width:0;font-size:15px;font-weight:600}
+.leftover-name .rank{display:none}
+.leftover-priority{grid-column:1;grid-row:1 / 3;display:grid;grid-template-columns:24px 32px;gap:4px;align-items:center;align-self:start}
+.leftover-priority button{width:32px;height:32px;border:1px solid var(--line);border-radius:6px;background:transparent;color:inherit;cursor:pointer}
+.leftover-priority button:disabled{opacity:.3;cursor:default}
+.leftover-priority .draghandle{grid-row:1 / 3;width:24px;height:68px;border:0;cursor:grab;touch-action:none}
+.leftover-cap{grid-column:3;grid-row:1;display:grid;gap:4px}
+.leftover-card .leftover-cap input{width:100%;min-width:0;min-height:38px;padding:8px;font-size:14px}
+.leftover-amount{grid-column:4;grid-row:1;display:grid;gap:3px;min-width:0}
+.leftover-amount>span{font-size:11px;color:var(--muted)}
+.leftover-amount strong{font-size:21px;line-height:1.2;font-variant-numeric:tabular-nums}
+.leftover-amount small{font-size:11px;line-height:1.4;color:var(--muted)}
+.leftover-card>.iconbutton{grid-column:5;grid-row:1;position:static;width:36px;height:36px;align-self:start}
+.leftover-explore{grid-column:2 / 5;grid-row:2;display:flex;flex-wrap:wrap;align-items:center;gap:12px 24px;padding-top:12px;border-top:1px solid var(--line);min-width:0}
+.leftover-explore .check{display:flex;align-items:center;gap:8px;font-size:13px;color:inherit;min-height:36px}
+.leftover-focus{display:flex;align-items:center;gap:8px;flex:1;min-width:240px}
+.leftover-focus select{width:100%;min-width:0;max-width:280px;min-height:38px;padding:8px;font-size:13px}
+.leftover-card>.leftover-note,.leftover-card>.externalnote,.leftover-card>.bottleneckbody{grid-column:2 / -2;grid-row:auto;margin:0;min-width:0}
+.leftover-note .hint{margin:0;font-size:12px;line-height:1.6}
+.leftover-note:empty{display:none}
+.leftover-card .bottleneckbody{padding:12px;border:1px solid var(--line);border-radius:8px}
+/* Native dialogs must be positioned in the viewport, not the document flow. */
+dialog,#suggestionsDialog{position:fixed;inset:0;margin:auto;max-height:calc(100dvh - 32px);overflow:auto;overscroll-behavior:contain;box-shadow:0 20px 70px #0005}
+#consumerDialog{inset:auto;margin:0;left:12px;top:12px;width:min(560px,calc(100vw - 24px));max-height:calc(100dvh - 24px);padding:24px}
+#consumerDialog .sectiontitle{align-items:flex-start;gap:16px;margin-bottom:12px}
+#consumerDialog .sectiontitle>.iconbutton{flex-shrink:0;width:36px;height:36px}
+#consumerDialog h2{font-size:20px;line-height:1.5}
+#consumerDialog>.hint{margin:0 0 16px;line-height:1.6}
+#consumerDialog #suggestMaterial{margin-top:12px}
+#consumerList{max-height:none;overflow:visible;margin-top:20px}
+#consumerDialog .consumer{gap:16px;padding:12px 0}
+@media(max-width:800px){
+ #secondaryRows .leftover-card{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 36px;gap:14px 12px;padding:14px}
+ .leftover-name{grid-column:1 / 3;grid-row:1;min-height:36px;font-size:15px}
+ .leftover-card>.iconbutton{grid-column:3;grid-row:1;width:36px;height:36px}
+ .leftover-cap{grid-column:2 / 4;grid-row:2}
+ .leftover-amount{grid-column:1;grid-row:2}
+ .leftover-card .leftover-cap input{min-height:44px;font-size:16px}
+ .leftover-explore{grid-column:1 / -1;grid-row:3;display:grid;gap:10px;padding-top:12px}
+ .leftover-explore .check{min-height:44px;font-size:13px}
+ .leftover-focus{min-width:0;display:grid;grid-template-columns:1fr;gap:6px}
+ .leftover-focus select{max-width:none;min-height:44px;font-size:16px}
+ .leftover-priority{grid-column:1 / -1;grid-row:4;display:flex;gap:8px;align-items:center}
+ .leftover-priority::after{content:'Priority';font-size:12px;color:var(--muted);margin-left:4px}
+ .leftover-priority button{width:44px;height:44px}
+ .leftover-priority .draghandle{display:none}
+ .leftover-card>.leftover-note,.leftover-card>.externalnote,.leftover-card>.bottleneckbody{grid-column:1 / -1}
+ #consumerDialog{inset:0;margin:auto;width:calc(100% - 24px);max-height:calc(100dvh - 24px);padding:18px}
+ #consumerDialog .consumer{flex-direction:column;align-items:stretch;gap:10px}
+ #consumerDialog .consumer button{min-height:44px;width:100%}
+}
+@media(pointer:coarse){.leftover-priority .draghandle{display:none}.leftover-priority{display:flex;flex-wrap:wrap}}
