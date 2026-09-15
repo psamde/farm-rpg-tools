@@ -332,3 +332,13 @@ dialog,#suggestionsDialog{position:fixed;inset:0;margin:auto;max-height:calc(100
  #consumerDialog .consumer button{min-height:44px;width:100%}
 }
 @media(pointer:coarse){.leftover-priority .draghandle{display:none}.leftover-priority{display:flex;flex-wrap:wrap}}
+.bottleneckbody h4{font-size:12px;margin:14px 0 8px;color:var(--muted)}
+.needs-list{display:flex;flex-wrap:wrap;gap:8px}
+.needs-item{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:transparent;color:inherit;min-height:44px;max-width:100%;text-align:left;cursor:pointer}
+.needs-item strong{font-variant-numeric:tabular-nums;margin-left:auto;white-space:nowrap}
+.needs-item:hover{border-color:var(--accent)}
+@media(max-width:800px){.needs-list{display:grid;grid-template-columns:minmax(0,1fr)}.needs-item{width:100%;font-size:13px}}
+.needs-actions{display:flex;flex-wrap:wrap;gap:10px;margin:16px 0}.needs-actions button{min-height:44px}
+#needsDialog .sectiontitle{align-items:flex-start;gap:16px}
+@media(max-width:800px){.needs-actions{flex-direction:column}}
+.needs-actions button:not(.primary){border:1px solid var(--line);border-radius:7px;background:transparent;color:inherit;padding:10px 14px;cursor:pointer}

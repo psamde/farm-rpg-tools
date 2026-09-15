@@ -10,3 +10,20 @@ console.log('Suggestion checks passed: quantities, intermediate stock, material 
 
 
 const withoutPrimary=suggestCrafts(items,{wood:52},{targets:{board:100,mixed:100}});assert.ok(![...withoutPrimary.ready,...withoutPrimary.explore].some(r=>['board','mixed'].includes(r.id)));
+const {leftoverNeeds}=require('./web/suggestions.js');
+const dyeItems={
+ flower:{name:'Flower',direct_ingredients:{}},sand:{name:'Sand',direct_ingredients:{}},stone:{name:'Stone',direct_ingredients:{}},
+ bottle:{name:'Glass Bottle',output_quantity:1,direct_ingredients:{sand:2,stone:1}},
+ dye:{name:'Dye',output_quantity:1,direct_ingredients:{flower:3,bottle:1}}
+};
+let need=leftoverNeeds(dyeItems,{flower:300},{},{item_id:'dye'},0);
+assert.equal(need.batch,100);assert.equal(need.direct.bottle,100);assert.deepEqual(need.raw,{sand:200,stone:100});
+need=leftoverNeeds(dyeItems,{flower:300,bottle:20,sand:50},{},{item_id:'dye'},0);
+assert.equal(need.direct.bottle,80);assert.deepEqual(need.raw,{sand:110,stone:80});
+assert.equal(leftoverNeeds(dyeItems,{flower:300,bottle:100},{},{item_id:'dye'},0),null);
+need=leftoverNeeds(dyeItems,{flower:300},{resource_saver:50},{item_id:'dye',cap:60},10);
+assert.equal(need.batch,50);assert.ok(Math.abs(need.direct.bottle-100/3)<1e-8);
+assert.ok(Math.abs(need.raw.sand-136/3)<1e-8); // 34 bottle crafts, perk at both levels
+assert.equal(leftoverNeeds(dyeItems,{flower:1},{},{item_id:'dye'},1000),null);
+assert.equal(leftoverNeeds(dyeItems,{flower:300},{},{item_id:'dye',cap:10},10),null);
+console.log('Needs estimates: direct bottles, raw shortages, existing stocks, caps, perks and tiny tails passed');

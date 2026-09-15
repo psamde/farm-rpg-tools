@@ -186,21 +186,16 @@ function explorationIngredients(id){const seen=new Set();function visit(ref){for
 function addSecondary(id,ingredient=null){if(state.targets[id])throw Error('This item is already a primary target.');if(!items[id]?.craftable)throw Error('Choose a craftable item.');if(state.secondary.some(r=>r.item_id===id))return;if(state.secondary.length>=20)throw Error('Use at most 20 leftover targets.');state.secondary.push({item_id:id,allow_exploration:false,cap:null,exploration_item_id:ingredient});changed();}
 
 function leftoverBottleneck(goal,row,plan){
- if(!row||!plan?.item_balances||row.no_pool_inputs||(goal.cap!=null&&row.crafts>=goal.cap))return null;
+ if(!row||!plan?.item_balances||(goal.cap!=null&&row.crafts>=goal.cap))return null;
  const stock=Object.fromEntries(plan.item_balances.map(b=>[b.item_id,Math.max(0,(b.expected_final_inventory||0)-(b.reserved_target_output||0))]));
- const factor=1/(1+(Number(state.resource_saver)||0)/100),raw={};
- function flatten(id,n){if(id==='22'&&state.iron_depot||id==='38'&&state.iron_depot)return;const item=items[id];if(!item)return;if(!Object.keys(item.direct_ingredients||{}).length){raw[id]=(raw[id]||0)+n;return;}for(const [child,q] of Object.entries(item.direct_ingredients))flatten(child,n*q*factor/(item.output_quantity||1));}
- for(const [id,q] of Object.entries(items[goal.item_id].direct_ingredients||{}))flatten(id,q*factor);
- const substantial=Object.entries(raw).filter(([id,q])=>(stock[id]||0)/q>=Math.max(10,row.crafts*.05));
- if(row.crafts>0&&!substantial.length)return null;
- // Probe a small meaningful batch rather than reporting fractional rounding scraps.
- const batch=row.crafts?Math.max(10,Math.ceil(row.crafts*.05)):1,missing={};
- function need(id,n){if(state.iron_depot&&(id==='22'||id==='38'))return;const used=Math.min(stock[id]||0,n);stock[id]=(stock[id]||0)-used;n-=used;if(n<1e-7)return;const item=items[id];if(!item)return;const ingredients=Object.entries(item.direct_ingredients||{});if(!ingredients.length){missing[id]=(missing[id]||0)+n;return;}const crafts=Math.ceil((n-1e-8)/(item.output_quantity||1));stock[id]+=crafts*(item.output_quantity||1)-n;for(const [child,q] of ingredients)need(child,crafts*q*factor);}
- for(const [id,q] of Object.entries(items[goal.item_id].direct_ingredients||{}))need(id,q*factor*batch);
- const ids=Object.keys(missing);if(!ids.length)return null;
- return {ids,batch,remaining:substantial.filter(([id])=>!missing[id]).map(([id])=>({id,quantity:plan.item_balances.find(b=>b.item_id===id).expected_final_inventory}))};
+ return leftoverNeeds(items,stock,state,goal,row.crafts);
 }
-function bottleneckLabel(goal,row,plan,bodyOnly=false){const b=leftoverBottleneck(goal,row,plan);if(!b)return '';if(!bodyOnly)return `<button type="button" class="ingredienttoggle" data-ingredient-toggle="${goal.item_id}" aria-expanded="false" aria-controls="ingredient-details-${goal.item_id}" aria-label="Ingredient limits for ${esc(items[goal.item_id].name)}" title="Show ingredient limits"><span aria-hidden="true">▸</span></button>`;return `<div class="bottleneckbody" id="ingredient-details-${goal.item_id}" hidden><strong>${row.crafts?'Limited by':'Needs'} ${b.ids.map(id=>itemName(id,items[id].name)).join(' · ')}</strong><p>${row.crafts?`Not enough ingredients for another ${fmt(b.batch)} crafts.`:'Cannot craft yet.'} ${b.remaining.map(r=>`${fmt(r.quantity)} ${esc(items[r.id].name)} remains unused.`).join(' ')}</p><p>${goal.allow_exploration?'Extra exploring supports a balanced mix of crafts. Supplies from every location are shared.':'Turn on extra exploring to gather what’s missing.'}${row.lost_to_priority?' Move this craft higher to favor it, or cap another craft that uses the same ingredients.':''}</p></div>`;}
+function bottleneckLabel(goal,row,plan,bodyOnly=false){
+ const b=leftoverBottleneck(goal,row,plan);if(!b)return '';
+ if(!bodyOnly)return `<button type="button" class="ingredienttoggle" data-ingredient-toggle="${goal.item_id}" aria-expanded="false" aria-controls="ingredient-details-${goal.item_id}" aria-label="Ingredient needs for ${esc(items[goal.item_id].name)}" title="Show ingredient needs"><span aria-hidden="true">▸</span></button>`;
+ const rows=amounts=>Object.entries(amounts).map(([id,q])=>`<button type="button" class="needs-item" data-needs-item="${id}" data-needs-parent="${goal.item_id}" data-needs-quantity="${Math.ceil(q-1e-8)}" data-needs-focus="${b.focus||''}" aria-label="Add ${Math.ceil(q-1e-8)} ${esc(items[id].name)} for ${esc(items[goal.item_id].name)}">${itemName(id,items[id].name)}<strong>${fmt(Math.ceil(q-1e-8))}</strong><span aria-hidden="true">+</span></button>`).join('');
+ return `<div class="bottleneckbody" id="ingredient-details-${goal.item_id}" hidden><strong>${row.crafts?'Make more':'Needs ingredients'}</strong><p>${b.focus?`Aim for ${fmt(b.batch)} ${row.crafts?'more ':''}crafts using the remaining ${itemName(b.focus,items[b.focus].name)}.`:'Supplies for one craft. No unused ingredient is available to set a larger goal yet; other crafts may already be using it.'}</p><h4>Make or supply these ingredients</h4><div class="needs-list">${rows(b.direct)}</div><h4>Missing raw materials to make them</h4><div class="needs-list">${rows(b.raw)}</div><p class="hint">Existing supplies and Resource Saver are included. Supply amounts round up so you have enough. This estimate is for this item alone; other crafts may share these materials.</p></div>`;
+}
 function comparisonLabel(row){return row.comparison_status==='pending'?'Checking if first…':row.comparison_status==='unavailable'?'Comparison unavailable':row.lost_to_priority?`${fmt(row.if_first)} alone on this route`:'';}
 function secondaryRows(showResults=false){
 
@@ -224,6 +219,34 @@ function secondaryRows(showResults=false){
 }
 
 $('secondaryRows').onclick=e=>{const b=e.target.closest('button');if(!b)return;let i,j;if(b.dataset.secondaryRemove!==undefined){state.secondary.splice(Number(b.dataset.secondaryRemove),1);}else{if(b.dataset.secondaryUp!==undefined){i=Number(b.dataset.secondaryUp);j=i-1;}else if(b.dataset.secondaryDown!==undefined){i=Number(b.dataset.secondaryDown);j=i+1;}else return;if(j<0||j>=state.secondary.length)return;[state.secondary[i],state.secondary[j]]=[state.secondary[j],state.secondary[i]];}changed();};
+
+let pendingNeed=null;
+$('secondaryRows').addEventListener('click',e=>{
+ const button=e.target.closest('[data-needs-item]');if(!button)return;
+ pendingNeed={id:button.dataset.needsItem,parent:button.dataset.needsParent,quantity:Number(button.dataset.needsQuantity),focus:button.dataset.needsFocus};
+ const n=pendingNeed,item=items[n.id];
+ $('needsTitle').innerHTML=itemName(n.id,item.name);
+ $('needsDescription').textContent=`${fmt(n.quantity)} more ${item.name} for ${items[n.parent].name}.`;
+ $('planNeeds').disabled=!n.focus||Object.keys(item.raw_materials||{[n.id]:1}).some(id=>!items[id]?.explorable&&!(state.iron_depot&&['22','38'].includes(id)));
+ $('needsActionHint').textContent=$('planNeeds').disabled?'Add supplies you obtain outside this route, or choose an available focus ingredient on the craft first.':`Planning enables extra exploring for ${items[n.parent].name}, using ${items[n.focus].name} as its focus. The solver balances the added explores with your other crafts; it may choose less than this estimate.`;
+ $('bringNeeds').textContent=state.planner_mode==='passive'?'Add to production amounts':'I’ll bring these supplies';
+ $('needsDialog').showModal();
+});
+$('closeNeeds').onclick=()=>{$('needsDialog').close();pendingNeed=null;};
+$('planNeeds').onclick=()=>{
+ if(!pendingNeed||$('planNeeds').disabled)return;
+ const n=pendingNeed,goal=state.secondary.find(g=>g.item_id===n.parent);if(!goal)return;
+ goal.allow_exploration=true;goal.exploration_item_id=n.focus;
+ // The parent's recipe already includes this ingredient in the shared solver.
+ // Listing it also makes its crafting output visible without reserving it.
+ if(items[n.id].craftable&&!state.targets[n.id]&&!state.secondary.some(g=>g.item_id===n.id)&&state.secondary.length<20)
+  state.secondary.push({item_id:n.id,allow_exploration:false,cap:null,exploration_item_id:null});
+ $('needsDialog').close();pendingNeed=null;changed();
+};
+$('bringNeeds').onclick=()=>{
+ if(!pendingNeed)return;const n=pendingNeed,stock=inventoryData();stock[n.id]=(stock[n.id]||0)+n.quantity;
+ setInventory(stock);inventoryRows();$('needsDialog').close();pendingNeed=null;changed();
+};
 
 $('secondaryRows').onchange=e=>{const anchor=e.target.dataset.secondaryAnchor;if(anchor!==undefined){state.secondary[Number(anchor)].exploration_item_id=e.target.value||null;changed();return;}const cap=e.target.dataset.secondaryCap;if(cap!==undefined){if(!e.target.reportValidity())return;state.secondary[Number(cap)].cap=e.target.value===''?null:Number(e.target.value);changed();return;}const i=e.target.dataset.secondaryExplore;if(i===undefined)return;state.secondary[Number(i)].allow_exploration=e.target.checked;changed();};
 
