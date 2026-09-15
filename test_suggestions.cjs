@@ -27,3 +27,11 @@ assert.ok(Math.abs(need.raw.sand-136/3)<1e-8); // 34 bottle crafts, perk at both
 assert.equal(leftoverNeeds(dyeItems,{flower:1},{},{item_id:'dye'},1000),null);
 assert.equal(leftoverNeeds(dyeItems,{flower:300},{},{item_id:'dye',cap:10},10),null);
 console.log('Needs estimates: direct bottles, raw shortages, existing stocks, caps, perks and tiny tails passed');
+const {priorityConflicts}=require('./web/suggestions.js');
+const priorities=[{item_id:'mixed',prioritize:true},{item_id:'board',prioritize:true}];
+assert.deepEqual(priorityConflicts(items,priorities,{}).mixed[0].ingredients,['wood']);
+assert.equal(priorityConflicts(items,[{item_id:'mixed',prioritize:true},{item_id:'board'}],{}).mixed.length,0);
+const perkItems={iron:{name:'Iron',direct_ingredients:{}},a:{direct_ingredients:{iron:1}},b:{direct_ingredients:{iron:2}}};
+assert.equal(priorityConflicts(perkItems,[{item_id:'a',prioritize:true},{item_id:'b',prioritize:true}],{iron_depot:true}).a.length,0);
+assert.equal(priorityConflicts(perkItems,[{item_id:'a',prioritize:true},{item_id:'b',prioritize:true}],{iron_depot:false}).a.length,1);
+console.log('Priority conflicts: recursive ingredients, single priority and free perk inputs passed');

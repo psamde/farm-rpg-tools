@@ -45,3 +45,7 @@ const anchored={...input,secondary:[{item_id:'craft',cap:5,allow_exploration:tru
 assert.equal(c.decodePlanCode(c.encodePlanCode(anchored)).secondary[0].exploration_item_id,'raw');
 assert.throws(()=>c.decodePlanCode(c.encodePlanCode({...anchored,secondary:[{...anchored.secondary[0],exploration_item_id:'bad'}]})));
 console.log('Chosen exploration ingredients survive saves; unrelated ingredients are rejected');
+const preferred={...input,secondary:[{item_id:'craft',cap:5,allow_exploration:true,prioritize:true}]};
+assert.equal(c.decodePlanCode(c.encodePlanCode(preferred)).secondary[0].prioritize,true);
+assert.throws(()=>c.decodePlanCode(c.encodePlanCode({...preferred,secondary:[{...preferred.secondary[0],prioritize:'yes'}]})));
+console.log('Explicit priorities survive saves; invalid priority values are rejected');

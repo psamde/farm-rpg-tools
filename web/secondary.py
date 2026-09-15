@@ -22,6 +22,9 @@ def validate_secondary(catalog, rows):
         assist = row.get('allow_exploration', False)
         if type(assist) is not bool:
             raise ValueError('Invalid exploration option.')
+        prioritize = row.get('prioritize', False)
+        if type(prioritize) is not bool:
+            raise ValueError('Invalid priority option.')
         cap = row.get('cap')
         if cap is not None and (type(cap) is not int or not 0 <= cap <= 100000000):
             raise ValueError('Leftover caps must be whole numbers from 0 to 100,000,000, or blank.')
@@ -33,7 +36,7 @@ def validate_secondary(catalog, rows):
                 return any(child == anchor or contains(child) for child in catalog['items'][parent]['direct_ingredients'])
             if not contains(ref):
                 raise ValueError('The exploration ingredient must be part of this recipe.')
-        result.append({'item_id': ref, 'allow_exploration': assist, 'cap': cap, **({'exploration_item_id': anchor} if anchor is not None else {})})
+        result.append({'item_id': ref, 'allow_exploration': assist, 'prioritize': prioritize, 'cap': cap, **({'exploration_item_id': anchor} if anchor is not None else {})})
     return result
 
 

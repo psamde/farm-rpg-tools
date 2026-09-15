@@ -1,8 +1,8 @@
 """Balanced mastery progress over one shared physical inventory.
 
 Continuous concave-utility allocation, followed by conservative whole-output
-rounding and dependency repair. List order is a soft preference, never a stock
-snapshot. Extra exploring has a positive cost; only enabled rows justify it.
+rounding and dependency repair. Explicit disjoint priorities get first claim;
+list order is visual. Extra exploring has a positive cost; only enabled rows justify it.
 """
 from collections import Counter
 from copy import deepcopy
@@ -14,7 +14,8 @@ def consume(catalog, primary, goals, areas=None, max_areas=15, progress=None):
     import numpy as np
     from scipy.optimize import Bounds, LinearConstraint, milp
     from planner import resolve
-    goals=deepcopy(goals)
+    requested_order={g["item_id"]:i for i,g in enumerate(goals)}
+    goals=sorted(deepcopy(goals),key=lambda g:g["item_id"])
     items = catalog['items']
     factor = 1/(1+primary['assumptions']['resource_saver']/100)
     free = {r['id'] for r in primary['assumptions']['unlimited_free_items']}
@@ -43,18 +44,22 @@ def consume(catalog, primary, goals, areas=None, max_areas=15, progress=None):
         rates[a][r]=q
     if any(not v for v in rates.values()): raise ValueError('Missing exploration table')
     base_e={a['location_id']:a['explores'] for a in primary['areas']}
-    # Legacy/API calls can omit the focus ingredient. Choose an existing input;
-    # a completely empty pool never seeds an unlimited exploration target.
+    # Priority conflicts include every dependency, excluding free perk supplies.
+    def dependencies(r):
+        out=set()
+        for child in items[r]['direct_ingredients']:
+            if child in free: continue
+            out.add(child); out.update(dependencies(child))
+        return out
+    preferred=[g for g in goals if g.get('prioritize',False)]
+    inputs={g['item_id']:dependencies(g['item_id']) for g in preferred}
     for g in goals:
-        if g['allow_exploration'] and not g.get('exploration_item_id'):
-            candidates=[]
-            def candidate(r):
-                for child in items[r]['direct_ingredients']:
-                    if child not in free and pool[child]>0: candidates.append(child)
-                    candidate(child)
-            candidate(g['item_id'])
-            if candidates: g['exploration_item_id']=max(candidates,key=lambda r:pool[r])
-    assisted=[g for g in goals if g['allow_exploration'] and g.get('exploration_item_id')]
+        conflicts={other['item_id']:sorted(inputs[g['item_id']] & inputs[other['item_id']])
+            for other in preferred if g.get('prioritize') and other is not g
+            and inputs[g['item_id']] & inputs[other['item_id']]}
+        g['priority_conflicts']=conflicts
+        g['priority_active']=bool(g.get('prioritize') and not conflicts)
+    assisted=[g for g in goals if g['allow_exploration']]
     caps={g['item_id']:g['cap'] for g in goals if g.get('cap') is not None}
     refs=sorted(seen-free)
     C={r:i for i,r in enumerate(order)}
@@ -103,7 +108,7 @@ def consume(catalog, primary, goals, areas=None, max_areas=15, progress=None):
     def available(r):
         if r in free: return 0
         if not items[r]['craftable']: return pool[r]
-        # Maximize retained focus material using the actual stock ledger.
+        # Maximize retained intermediate material using the actual stock ledger.
         # Flattening to raw ingredients loses existing bottles/leather/etc;
         # independently expanding branches can also spend shared stock twice.
         stock_high=high.copy()
@@ -131,7 +136,7 @@ def consume(catalog, primary, goals, areas=None, max_areas=15, progress=None):
             row=np.zeros(n); row[C[r]]=-1/scale
             for col in Z[r]: row[col]=1
             extra.append(LinearConstraint(row,-np.inf,0))
-            weight=1+.5*(len(goals)-i-1)/max(1,len(goals)-1)
+            weight=3 if g['priority_active'] else 1
             for k,col in enumerate(Z[r]):
                 objective[col]=-weight*(math.log1p(9*breaks[k+1])-math.log1p(9*breaks[k]))/(breaks[k+1]-breaks[k])
         for col in E.values(): objective[col]=explore_cost/cost_scale
@@ -146,14 +151,20 @@ def consume(catalog, primary, goals, areas=None, max_areas=15, progress=None):
         return solve(tie,extra)
     scales={}
     for g in assisted:
-        r,anchor=g['item_id'],g['exploration_item_id']; need=ingredients(r).get(anchor,0)
-        if not need or r not in C: continue
-        amount=available(anchor)
-        if amount<1:
-            # This is only a scoring scale, never a frozen stock entitlement.
-            # Zero original supply must not forbid using later area drops.
-            amount=max(1,max((v[anchor] for v in rates.values()),default=0)*cost_scale)
-        scales[r]=max(1,amount/need)
+        r=g['item_id']
+        if r not in C: continue
+        needs=ingredients(r)
+        # Existing stocks across the recipe set a finite exploration aim.
+        # Direct intermediates are computed from a shared-stock LP, so existing
+        # bottles count and overlapping raw ingredients are not spent twice.
+        direct=[available(a)/needs[a] for a in items[r]['direct_ingredients'] if a in needs]
+        direct=[q for q in direct if q>1e-8]
+        references=direct or [pool[a]/q for a,q in needs.items() if q>0 and pool[a]>1e-8]
+        # Fill missing branches around the scarce existing input. An abundant
+        # incidental drop must not inflate every recipe into an enormous goal.
+        amount=min(references,default=0)
+        if amount<1e-8: continue
+        scales[r]=amount
         if g['cap'] is not None: scales[r]=min(scales[r],g['cap'])
     x=utility(set(scales),scales,.25) if scales else solve(np.zeros(n))
     used_new=[a for a,col in E.items() if a not in base_e and x[col]>1e-6]
@@ -173,6 +184,13 @@ def consume(catalog, primary, goals, areas=None, max_areas=15, progress=None):
         except ValueError as err:
             if 'unbounded' not in str(err).lower(): raise
             maxima[r]=0
+    # On the chosen route, disjoint priorities get first claim. Their solo
+    # maxima are jointly feasible because their complete input sets do not overlap.
+    for g in goals:
+        r=g['item_id']
+        if g['priority_active'] and r in C and maxima[r]>0:
+            row=np.zeros(n); row[C[r]]=1
+            constraints.append(LinearConstraint(row,max(0,maxima[r]-max(1e-6,maxima[r]*1e-8)),np.inf))
     x=utility(set(maxima),maxima,0)
     explored=Counter()
     for a,q in extra_e.items():
@@ -205,6 +223,7 @@ def consume(catalog, primary, goals, areas=None, max_areas=15, progress=None):
             else: right=mid
         retained=left; counts=round_plan(left)
     if counts is None: raise ValueError('Could not verify whole-craft allocation')
+    goals.sort(key=lambda g:requested_order[g["item_id"]])
     return report(catalog,primary,goals,counts,extra_e,rates,pool,factor,free,maxima,scales,retained)
 
 
@@ -249,9 +268,6 @@ def report(catalog,primary,goals,counts,extra_e,rates,pool,factor,free,maxima,sc
         r=g['item_id']; count=counts.get(r,0); alone=max(count,int(math.floor(maxima.get(r,0)+1e-7)))
         row=dict(**g,name=items[r]['name'],crafts=count,if_first=alone,comparison_status='complete',comparison_kind='alone',
             lost_to_priority=alone>count+max(2,alone*.001),crafts_from_final_surplus=0,pool_credit_used=0,pool_credit_if_first=0,missing_for_next_craft=[])
-        if g.get('exploration_item_id'):
-            a=g['exploration_item_id']; row['exploration_ingredient']=dict(item_id=a,name=items[a]['name'],
-                available=pool[a]+explored[a],used=cc[a],planned_crafts=count)
         if not count:
             available=Counter({r:max(0,b['expected_final_inventory']-b['reserved_target_output']) for r,b in balances.items()})
             missing=Counter()
@@ -267,13 +283,13 @@ def report(catalog,primary,goals,counts,extra_e,rates,pool,factor,free,maxima,sc
         targets.append(row)
     result.update(areas=area_rows,optimal_total_explores=total,item_balances=sorted(balances.values(),key=lambda b:b['name']),
         unused_items=[b for b in balances.values() if b['expected_unused']>1e-8],continuous_lower_bound_explores=None,
-        model='balanced mastery progress with soft list preferences')
+        model='balanced mastery progress with explicit disjoint priorities')
     result['solver']=dict(name='SciPy/HiGHS',optimal=False,scope='balanced continuous utility; verified whole-craft repair',tie_break='fewest extra explores and crafts')
     result['secondary']=dict(schema_version='3.0.0',targets=targets,primary_explores=primary['optimal_total_explores'],
         additional_explores=sum(extra_e.values()),route_reoptimized=bool(sum(extra_e.values())),
         priority_matters=any(t['lost_to_priority'] for t in targets),
         crafts_in_dependency_order=[dict(item_id=r,name=items[r]['name'],crafts=q,expected_paid_crafts=q*factor) for r,q in reversed(list(counts.items())) if q],
         pool=[dict(item_id=r,name=items[r]['name'],quantity=q) for r,q in pool.items() if q>0],
-        semantics='Balance achievable crafting shares. Higher rows have a modest preference. All route supplies are shared.',
+        semantics='Balance achievable crafting shares. Conflict-free priorities get first claim; list order is visual. All route supplies are shared.',
         rounding_retained_fraction=retained,exploration_reference_crafts=scales)
     return result

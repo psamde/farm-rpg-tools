@@ -342,3 +342,5 @@ dialog,#suggestionsDialog{position:fixed;inset:0;margin:auto;max-height:calc(100
 #needsDialog .sectiontitle{align-items:flex-start;gap:16px}
 @media(max-width:800px){.needs-actions{flex-direction:column}}
 .needs-actions button:not(.primary){border:1px solid var(--line);border-radius:7px;background:transparent;color:inherit;padding:10px 14px;cursor:pointer}
+.priority-warning{font-size:12px;line-height:1.7;border-left:3px solid #d5b978;padding:8px 12px;color:var(--text)}
+@media(max-width:800px){.leftover-priority::after{content:'Display order'}}

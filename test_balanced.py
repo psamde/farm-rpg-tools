@@ -23,7 +23,7 @@ class BalancedTests(unittest.TestCase):
             self.assertGreaterEqual(b['expected_final_inventory']+1e-6,b['reserved_target_output'])
         self.assertEqual(sum(a['explores'] for a in r['areas']),r['optimal_total_explores'])
 
-    def test_breadth_and_soft_reordering(self):
+    def test_breadth_and_visual_reordering(self):
         c,p=self.fixture()
         rows=[{'item_id':'5','allow_exploration':False},{'item_id':'6','allow_exploration':False}]
         a=consume_leftovers(c,p,rows)
@@ -31,10 +31,55 @@ class BalancedTests(unittest.TestCase):
         counts={x['item_id']:x['crafts'] for x in a['secondary']['targets']}
         swapped={x['item_id']:x['crafts'] for x in b['secondary']['targets']}
         self.assertGreater(counts['5'],0); self.assertGreater(counts['6'],0)
-        self.assertGreater(counts['5'],counts['6'])
-        self.assertGreater(swapped['6'],swapped['5'])
+        self.assertEqual(counts,swapped)
         self.assertEqual(a['optimal_total_explores'],p['optimal_total_explores'])
         self.balanced(a); self.balanced(b)
+
+    def test_explicit_priority_and_conflicts(self):
+        c,p=self.fixture()
+        rows=[{'item_id':'5','prioritize':True},{'item_id':'6'}]
+        r=consume_leftovers(c,p,rows)
+        values={g['item_id']:g for g in r['secondary']['targets']}
+        self.assertTrue(values['5']['priority_active'])
+        self.assertGreaterEqual(values['5']['crafts'],99)
+        self.assertLessEqual(values['6']['crafts'],1)
+        rows[1]['prioritize']=True
+        r=consume_leftovers(c,p,rows)
+        for g in r['secondary']['targets']:
+            self.assertFalse(g['priority_active'])
+            self.assertTrue(g['priority_conflicts'])
+            self.assertGreater(g['crafts'],0)
+        self.balanced(r)
+
+    def test_disjoint_priorities_and_transitive_conflicts(self):
+        c,p=self.fixture()
+        c['items']['6']['direct_ingredients']={'2':1}
+        p=plan(c,'Target',1,inventory={'1':101,'2':50})
+        r=consume_leftovers(c,p,[{'item_id':'5','prioritize':True},{'item_id':'6','prioritize':True}])
+        self.assertTrue(all(g['priority_active'] for g in r['secondary']['targets']))
+        self.balanced(r)
+        c['items']['6']['direct_ingredients']={'5':1}
+        r=consume_leftovers(c,p,[{'item_id':'5','prioritize':True},{'item_id':'6','prioritize':True}])
+        self.assertTrue(all(not g['priority_active'] for g in r['secondary']['targets']))
+        self.balanced(r)
+
+    def test_automatic_exploration_ignores_legacy_focus(self):
+        c,p=self.fixture();c['items']['6']['direct_ingredients']={'1':1,'2':1}
+        rows=[{'item_id':'6','allow_exploration':True}]
+        a=consume_leftovers(c,p,rows)
+        b=consume_leftovers(c,p,[dict(rows[0],exploration_item_id='2')])
+        self.assertGreater(a['secondary']['targets'][0]['crafts'],0)
+        self.assertEqual(a['optimal_total_explores'],b['optimal_total_explores'])
+        self.assertEqual(a['secondary']['targets'][0]['crafts'],b['secondary']['targets'][0]['crafts'])
+        self.balanced(a)
+
+    def test_abundant_incidental_input_does_not_inflate_exploration_aim(self):
+        c,p=self.fixture(); c['items']['6']['direct_ingredients']={'1':1,'2':1}
+        p=plan(c,'Target',1,inventory={'1':101,'2':1000000000})
+        r=consume_leftovers(c,p,[{'item_id':'6','allow_exploration':True}])
+        self.assertAlmostEqual(r['secondary']['exploration_reference_crafts']['6'],100)
+        self.assertEqual(r['optimal_total_explores'],p['optimal_total_explores'])
+        self.balanced(r)
 
     def test_cap_and_zero_cap(self):
         c,p=self.fixture()
@@ -121,7 +166,7 @@ class BalancedTests(unittest.TestCase):
             r=result['plans'][0]; results.append(r); self.balanced(r)
             bag=next(t for t in r['secondary']['targets'] if t['item_id']=='539')
             self.assertGreaterEqual(bag['crafts'],9990)
-            self.assertAlmostEqual(r['secondary']['exploration_reference_crafts']['539'],20000*(1+saver/100)**2)
+            self.assertGreaterEqual(r['secondary']['exploration_reference_crafts']['539'],20000*(1+saver/100)**2-1e-6) # all recipe inputs now inform the aim
         bag_counts=[next(t['crafts'] for t in r['secondary']['targets'] if t['item_id']=='539') for r in results]
         self.assertGreater(bag_counts[1],bag_counts[0]*2)
         self.assertNotEqual(results[0]['optimal_total_explores'],results[2]['optimal_total_explores'])

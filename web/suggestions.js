@@ -70,3 +70,12 @@ function leftoverNeeds(items,stock,settings,goal,current=0){
  return {batch,focus,focusQuantity:focus?stock[focus]:0,direct,raw};
 }
 if(typeof module!=='undefined')module.exports.leftoverNeeds=leftoverNeeds;
+/* Compare complete recipe inputs before applying explicit priorities. */
+function priorityConflicts(items,goals,settings){
+ const free=id=>settings.iron_depot&&['Iron','Nails'].includes(items[id]?.name);
+ function inputs(id,seen=new Set()){for(const child of Object.keys(items[id]?.direct_ingredients||{})){if(free(child)||seen.has(child))continue;seen.add(child);inputs(child,seen);}return seen;}
+ const chosen=goals.filter(g=>g.prioritize),sets=Object.fromEntries(chosen.map(g=>[g.item_id,inputs(g.item_id)])),result={};
+ for(const g of chosen){result[g.item_id]=[];for(const other of chosen){if(g===other)continue;const shared=[...sets[g.item_id]].filter(id=>sets[other.item_id].has(id));if(shared.length)result[g.item_id].push({item_id:other.item_id,ingredients:shared});}}
+ return result;
+}
+if(typeof module!=='undefined')module.exports.priorityConflicts=priorityConflicts;

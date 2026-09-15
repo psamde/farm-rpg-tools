@@ -1,8 +1,10 @@
-# Balanced leftovers, v0.1.3
+# Balanced leftovers, v0.1.7
 
-The existing leftovers UI now uses `balanced.py` by default. Reordering gives
-a soft preference, caps still include intermediate crafts, and primary targets
-remain reserved. Save settings are unchanged. The older allocator is retained
+The existing leftovers UI now uses `balanced.py` by default. Reordering is visual only. Explicit priorities get first claim when their complete
+recipe inputs do not overlap another priority. Both conflicting selections remain
+checked but inactive. Free Iron/Nails do not conflict with Iron Depot enabled.
+Caps include intermediate crafts and primary targets remain reserved. Old saves
+load with no priorities; legacy ingredient choices no longer affect solving. The older allocator is retained
 privately in `secondary.py` for regression comparisons, not as a UI option.
 
 ## What “balanced” means in this version
@@ -15,20 +17,24 @@ exact average of raw-material consumption percentages, and it does not promise
 that every selected craft has enough ingredients to be made.
 
 The score approximates `log(1 + 9 * share)` at shares 0, .02, .05, .1, .2, .35,
-.5, .75, and 1. List weights decrease smoothly from 1.5 for the first row to 1
-for the last; with one row its weight is 1. Caps bound aggregate craft counts,
+.5, .75, and 1. All normal rows have equal weight. Valid priorities have weight 3
+during route selection and receive their solo maximum on the chosen route before
+balancing other crafts (subject to conservative output rounding). Caps bound aggregate craft counts,
 including quantities used downstream. Intermediary crafting counts toward
 mastery even when its output is consumed by another selected craft.
 
 ## Extra exploring
 
 Only rows with extra exploring enabled can justify additional exploring.
-Their chosen ingredient supplies an exploration scoring reference. If no such
-ingredient exists in the original supply, a drop-rate reference allows later
-sources to participate. This reference normalizes the reward; it is **not** a
-physical stock budget or a constraint freezing newly gathered ingredients.
-Legacy/API calls lacking an ingredient select an existing recipe input when
-possible. An empty legacy pool cannot initiate an unbounded crafting target.
+Their entire recipe supplies a finite scoring reference: the smallest positive supported
+craft quantity among feasible direct inputs, falling back to existing ingredients
+further down the recipe if no direct input is available. Missing branches may
+be explored for; abundant incidental drops do not inflate the whole goal.
+Direct intermediate supply is computed with a shared-stock LP, preserving existing
+bottles and avoiding shared-raw double spending. There is no user-selected anchor.
+An empty recipe pool does not justify its own extra exploration, but can share
+new drops generated for other crafts. The reference is a scoring scale, not a
+physical stock budget; the material balance remains the source of truth.
 
 The route score charges 0.25 per primary-route-equivalent of extra explores.
 For passive inputs, the reference cost comes from the explorable raw ingredients
@@ -61,7 +67,7 @@ provided stock; missing ingredients are reported for zero-output crafts.
 
 ## Validation
 
-`test_balanced.py` covers breadth, soft priority reversal, caps, intermediate
+`test_balanced.py` covers breadth, order independence, explicit priority/conflict handling, caps, intermediate
 caps/order, missing external inputs, existing finished stock, input immutability,
 empty targets, the large saved Diary/Ring chain, later Antler supplies, and
 physical balances. The CI also retains the previous allocator's historical

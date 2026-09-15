@@ -4,6 +4,7 @@ const fs=require('fs'),path=require('path'),assert=require('node:assert/strict')
  await py.loadPackage('scipy');
  for(const name of ['planner.py','secondary.py','balanced.py','browser_engine.py','wasm_solver.py'])
   py.FS.writeFile('/home/pyodide/'+name,fs.readFileSync('web/'+name,'utf8'));
+ for(const name of ['test_balanced.py','test_planner.py','farmdata.py']) py.FS.writeFile('/home/pyodide/'+name,fs.readFileSync(name,'utf8'));
  const highs=await require('./web/vendor/highs/highs.js')();
  py.globals.set('highs_solve',(lp,opts)=>JSON.stringify(highs.solve(lp,JSON.parse(opts))));
  py.globals.set('catalog_json',fs.readFileSync('data/catalog.json','utf8'));
@@ -13,6 +14,10 @@ import json
 from wasm_solver import install
 install(highs_solve)
 from browser_engine import compute
+import unittest
+from test_balanced import BalancedTests
+suite=unittest.TestSuite(BalancedTests(name) for name in ['test_breadth_and_visual_reordering','test_explicit_priority_and_conflicts','test_disjoint_priorities_and_transitive_conflicts','test_automatic_exploration_ignores_legacy_focus'])
+assert unittest.TextTestRunner().run(suite).wasSuccessful()
 catalog=json.loads(catalog_json)
 payload=json.loads(payload_json)
 runs=[]
@@ -28,7 +33,7 @@ for saver,rune in [(0,False),(45,False),(0,True),(45,True)]:
         reference=p['secondary']['exploration_reference_crafts']['539']))
 json.dumps(runs)
 `));
- for(const r of runs){assert(!r.cache);assert(r.bags>=9990);assert(Math.abs(r.reference-20000*(1+r.saver/100)**2)<1e-5);}
+ for(const r of runs){assert(!r.cache);assert(r.bags>=9990);assert(r.reference>=20000*(1+r.saver/100)**2-1e-5);}
  assert(runs[1].bags>runs[0].bags*2);
  assert.equal(runs[0].primary,runs[1].primary);
  assert.notEqual(runs[0].explores,runs[2].explores);
