@@ -1,0 +1,52 @@
+name: Refresh game data
+on:
+  schedule:
+    - cron: '23 5 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: refresh-game-data
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: python -m pip install -r requirements.txt
+      - name: Fetch and validate fresh Buddy Farm data
+        run: python refresh_data.py
+      - name: Test before publishing
+        run: |
+          python -m unittest test_refresh_data test_planner test_secondary test_balanced test_external test_passive test_primary_cache test_guided test_cockatrice
+          node test_save.cjs
+          node test_craft_map.cjs
+          node test_map_supply.cjs
+      - name: Build static site
+        run: python build_static.py
+      - name: Commit changed data and trigger Cloudflare Git deployment
+        run: |
+          git add data/catalog.json VERSION web/catalog.json web/index.html
+          if git diff --cached --quiet; then
+            echo "No data changes to publish." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Refresh Buddy Farm catalog (v$(cat VERSION))"
+          # A concurrent main update rejects this push safely; rerun against its new code.
+          git push origin HEAD:main
+          echo "Updated Buddy Farm catalog pushed. Cloudflare builds through its Git integration." >> "$GITHUB_STEP_SUMMARY"
