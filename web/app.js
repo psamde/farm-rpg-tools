@@ -16,7 +16,7 @@ function settingIcons(){document.querySelectorAll('[data-setting-icon]').forEach
 
 let catalog, items={}, state, result=null, selected=0, consumers=[], revision=0, timer, lastSuccess=null;
 
-const defaults={selected_plan:0,selected_plan_key:"",planner_mode:'goals',production_interval:60,passive_inventory:'{}',craftworks_slots:10,inventory_size:10000,route_method:'AP',route_foods:{},secondary:[],theme:'dark',resource_saver:0,wanderer:0,lemon_squeezer:false,cinnamon:false,cider_rolls:{},effectiveness_upgrades:{},sprint_shoes:0,targets:{'167':1000},iron_depot:true,runecube:false,mode:'best',max_areas:15,areas:null,inventory:'{}'};
+const defaults={selected_plan:0,selected_plan_key:"",planner_mode:'goals',production_interval:60,passive_inventory:'{}',craftworks_slots:10,inventory_size:10000,route_method:'AP',route_foods:{},secondary:[],automatic_areas:null,theme:'dark',resource_saver:0,wanderer:0,lemon_squeezer:false,cinnamon:false,cider_rolls:{},effectiveness_upgrades:{},sprint_shoes:0,targets:{'167':1000},iron_depot:true,runecube:false,mode:'best',max_areas:15,areas:null,inventory:'{}'};
 
 async function api(url,body){return browserPlanner.api(url,body);}
 
@@ -113,7 +113,7 @@ $('allAreas').onclick=()=>{state.areas=catalog.locations.map(a=>a.id);areas();ch
 
 $('compute').onclick=()=>{revision++;clearTimeout(timer);calculate();};
 
-async function calculate(){state.secondary=state.secondary.filter(r=>!state.targets[r.item_id]);const token=++revision;error('');if(state.planner_mode!=='passive'&&!Object.keys(state.targets).length){resetEmptyPlan();return;}let payload;try{payload={planner_mode:state.planner_mode,production_interval:state.production_interval,targets:state.planner_mode==='passive'?{}:{...state.targets},secondary:state.secondary.map(r=>({item_id:r.item_id,allow_exploration:r.allow_exploration,cap:r.cap,prioritize:r.prioritize===true})),areas:[...state.areas],iron_depot:state.iron_depot,runecube:state.runecube,resource_saver:state.resource_saver,combinations_mode:state.mode==='combinations',inventory:inventoryData()};}catch{error('Starting inventory must be valid JSON, for example {"Wood": 100}.');$('status').textContent='Check starting inventory.';$('compute').disabled=false;$('status').classList.remove('loading');return;}
+async function calculate(){state.secondary=state.secondary.filter(r=>!state.targets[r.item_id]);const token=++revision;error('');if(state.planner_mode!=='passive'&&!Object.keys(state.targets).length){resetEmptyPlan();return;}let payload;try{payload={planner_mode:state.planner_mode,production_interval:state.production_interval,targets:state.planner_mode==='passive'?{}:{...state.targets},secondary:state.secondary.map(r=>({item_id:r.item_id,allow_exploration:r.allow_exploration,cap:r.cap,prioritize:r.prioritize===true})),areas:[...state.areas],automatic_areas:state.automatic_areas?.filter(id=>state.areas.includes(id))||null,iron_depot:state.iron_depot,runecube:state.runecube,resource_saver:state.resource_saver,combinations_mode:state.mode==='combinations',inventory:inventoryData()};}catch{error('Starting inventory must be valid JSON, for example {"Wood": 100}.');$('status').textContent='Check starting inventory.';$('compute').disabled=false;$('status').classList.remove('loading');return;}
 
 const settingsKey=JSON.stringify({...payload,targets:null,secondary:null});$('compute').disabled=true;$('status').textContent='Finding exploration plans…';$('status').classList.add('loading');$('resultContent').classList.add('stale');try{let published=false;const {job_id}=await api('/api/plan',payload);while(token===revision){const job=await api('/api/jobs/'+job_id);if(job.status==='error')throw Error(job.error);if(job.status==='complete'||job.status==='comparisons'){if(published){result=job.result;for(const row of result.plans[selected].secondary?.targets||[]){const label=document.querySelector(`[data-leftover-id="${row.item_id}"] .leftover-amount small`);if(label)label.textContent=comparisonLabel(row);}if(job.status==='complete')return;await new Promise(r=>setTimeout(r,500));continue;}published=true;result=job.result;selected=restorePlanChoice(result.plans,state);rememberPlanChoice();const best=result.plans[0].optimal_total_explores;const delta=lastSuccess&&lastSuccess.settingsKey===settingsKey?best-lastSuccess.best:null;render(delta);lastSuccess={best,settingsKey};$('status').textContent=`${result.enumeration.combinations_checked} area combinations checked · ${result.enumeration.feasible_options} distinct plans`;$('compute').disabled=false;$('status').classList.remove('loading');if(job.status==='complete')return;await new Promise(r=>setTimeout(r,500));continue;}$('status').textContent=job.total?`Comparing area combinations: ${job.done} of ${job.total}…`:(job.message||'Optimizing shared ingredients…');await new Promise(r=>setTimeout(r,500));}}catch(e){if(token===revision){error(e.message.split(/\n/).filter(Boolean).at(-1).replace(/^(?:planner\.)?(?:InfeasiblePlan|ValueError): /,''));$('status').textContent='Could not calculate this plan. Adjust targets, inventory, or areas.';}}finally{if(token===revision){$('compute').disabled=false;$('status').classList.remove('loading');}}}
 
@@ -128,7 +128,7 @@ $('planChoices').innerHTML=result.plans.map((p,i)=>`<button type="button" class=
 
 $('planChoices').addEventListener('click',e=>{const b=e.target.closest('[data-plan]');if(b){selected=Number(b.dataset.plan);rememberPlanChoice();planChoices();detail();}});
 
-function detail(){const p=result.plans[selected];$('planDetail').innerHTML=`<p class="hint">Pick a material to find crafts that use it. These are totals for the whole plan: what’s left and what your leftover crafts use. Finished leftover crafts are included; your primary targets are kept aside. You can still pick materials showing 0.</p><button type="button" id="suggestAll" class="primary">Suggest item</button><label class="sr" for="unusedSearch">Filter unused items</label><input id="unusedSearch" placeholder="Search materials…"><table class="unusedtable"><thead><tr><th>Material</th><th>Expected unused*</th><th>Used by leftover craft*</th></tr></thead><tbody id="unusedRows"></tbody></table><p class="hint">*Rounded down to whole items. Calculations use the full values.</p>`;unused();$('unusedSearch').oninput=unused;summaryCosts();secondaryRows(true);implicitRows(p);renderRoute();startingSupplyReport(p);}
+function detail(){const p=result.plans[selected];$('planDetail').innerHTML=`<p class="hint">Pick a material to find crafts that use it. These are totals for the whole plan: what’s left and what your leftover crafts use. Finished leftover crafts are included; your primary targets are kept aside. You can still pick materials showing 0.</p><button type="button" id="suggestAll" class="primary">Suggest item</button> <button type="button" id="automaticMaximize" class="primary">Automatic Maximize</button><p class="hint">Try a leftover plan automatically, then compare before applying.</p>${state.automatic_areas?`<p class="hint">Automatic plan: extra exploring is limited to ${state.automatic_areas.map(id=>esc(catalog.locations.find(a=>a.id===id)?.name||id)).join(', ')}. <button type="button" id="clearAutomaticAreas">Allow all available areas</button></p>`:''}<label class="sr" for="unusedSearch">Filter unused items</label><input id="unusedSearch" placeholder="Search materials…"><table class="unusedtable"><thead><tr><th>Material</th><th>Expected unused*</th><th>Used by leftover craft*</th></tr></thead><tbody id="unusedRows"></tbody></table><p class="hint">*Rounded down to whole items. Calculations use the full values.</p>`;unused();$('unusedSearch').oninput=unused;summaryCosts();secondaryRows(true);implicitRows(p);renderRoute();startingSupplyReport(p);}
 
 function implicitRows(p){
 
@@ -340,6 +340,7 @@ function validatePlanSettings(input){
  for(const [k,[lo,hi]] of Object.entries(ranges))if(typeof out[k]!=='number'||!Number.isFinite(out[k])||out[k]<lo||out[k]>hi||(['craftworks_slots','inventory_size','sprint_shoes'].includes(k)&&!Number.isInteger(out[k])))fail('Invalid '+k);
  for(const k of ['iron_depot','runecube','lemon_squeezer','cinnamon'])if(typeof out[k]!=='boolean')fail('Invalid '+k);
  for(const [k,values] of Object.entries({planner_mode:['goals','passive'],theme:['dark','light'],route_method:['AP','Cider'],mode:['best','combinations']}))if(!values.includes(out[k]))fail('Invalid '+k);
+ if(out.automatic_areas!==null&&(!Array.isArray(out.automatic_areas)||out.automatic_areas.some(id=>typeof id!=='string'||!catalog.locations.some(a=>a.id===id))))fail('Invalid automatic exploration locations');
  if(out.max_areas!==null&&(!Number.isInteger(out.max_areas)||out.max_areas<1||out.max_areas>15))fail('Invalid area limit');
  if(!object(out.targets)||Object.keys(out.targets).length>20)fail('Use at most 20 targets');
  for(const [id,n] of Object.entries(out.targets))if(!eligibleTarget(items[id])||!Number.isInteger(n)||n<1||n>100000000)fail('Invalid target '+id);
@@ -361,7 +362,7 @@ $('clearPlan').onclick=()=>{if(state)$('clearPlanDialog').showModal();};
 $('cancelClearPlan').onclick=()=>$('clearPlanDialog').close();
 $('confirmClearPlan').onclick=()=>{
  clearTimeout(timer);revision++;
- state.targets={};state.secondary=[];state.inventory='{}';state.passive_inventory='{}';
+ state.targets={};state.secondary=[];state.automatic_areas=null;state.inventory='{}';state.passive_inventory='{}';
  $('clearPlanDialog').close();error('');$('inventoryError').hidden=true;
  for(const id of ['itemInput','inventoryItem','planCode'])$(id).value='';
  $('planCodeStatus').textContent='';targets();inventoryRows();resetEmptyPlan();
@@ -471,3 +472,47 @@ $('secondaryRows').addEventListener('pointerup',()=>finishLeftoverDrag(true));
 $('secondaryRows').addEventListener('pointercancel',()=>finishLeftoverDrag(false));
 $('secondaryRows').addEventListener('lostpointercapture',()=>finishLeftoverDrag(false));
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&leftoverDrag){e.preventDefault();finishLeftoverDrag(false);}});
+
+let automaticResults=null, automaticToken=0, automaticRevision=0;
+$('planDetail').addEventListener('click',e=>{
+ if(e.target.closest('#automaticMaximize')){
+  if(!result||$('compute').disabled)return;
+  $('automaticReport').innerHTML='';$('automaticStatus').textContent='';automaticResults=null;
+  $('automaticDialog').showModal();
+ }
+ if(e.target.closest('#clearAutomaticAreas')){state.automatic_areas=null;changed();}
+});
+function stopAutomatic(){automaticToken++;browserPlanner.cancel();$('runAutomatic').disabled=false;$('automaticDialog').close();}
+$('closeAutomatic').onclick=stopAutomatic;
+$('automaticDialog').addEventListener('cancel',()=>{automaticToken++;browserPlanner.cancel();$('runAutomatic').disabled=false;});
+$('runAutomatic').onclick=async()=>{
+ const limit=Number($('automaticLocations').value);
+ if(!Number.isInteger(limit)||limit<0||limit>15){$('automaticStatus').textContent='Choose a whole number from 0 to 15.';return;}
+ const token=++automaticToken;automaticRevision=revision;automaticResults=null;
+ $('automaticReport').innerHTML='';$('runAutomatic').disabled=true;
+ const payload={action:'automatic',planner_mode:state.planner_mode,production_interval:state.production_interval,targets:state.targets,secondary:[],areas:[...state.areas],inventory:inventoryData(),iron_depot:state.iron_depot,runecube:state.runecube,resource_saver:state.resource_saver,combinations_mode:state.mode==='combinations',selected_plan_key:result.plans[selected].area_set_id,max_extra_locations:limit};
+ try{
+  const {job_id}=await api('/api/plan',payload);
+  while(token===automaticToken){
+   if(revision!==automaticRevision)throw Error('Your plan changed. Run Automatic Maximize again.');
+   const job=await api('/api/jobs/'+job_id);
+   if(job.status==='error')throw Error(job.error);
+   if(job.status==='complete'){
+    automaticResults=job.result;
+    $('automaticStatus').textContent=`Compared ${fmt(job.result.plans_checked)} candidate plans. Extra-exploring budget: ${fmt(job.result.extra_explore_budget)} explores. These are heuristic suggestions, not a guaranteed optimum.`;
+    $('automaticReport').innerHTML=job.result.options.map((o,i)=>`<section class="automatic-option"><h3>${esc(o.label)}</h3><p class="hint">${i?`Up to ${o.max_extra_locations} extra locations`:'Keep the original exploration amounts'}</p><dl><div><dt>Total explores</dt><dd>${fmt(o.plan.optimal_total_explores)}</dd></div><div><dt>Extra explores</dt><dd>${fmt(o.metrics.extra_explores)}</dd></div><div><dt>Original leftovers used*</dt><dd>${fmt(Math.floor(o.metrics.materials_used))}</dd></div><div><dt>Material types used</dt><dd>${o.metrics.material_types_used}</dd></div></dl><p class="hint">New locations: ${o.metrics.new_locations.map(id=>esc(catalog.locations.find(a=>a.id===id)?.name||id)).join(', ')||'None'}</p><details><summary>Crafted outputs (${o.metrics.crafted_types})</summary>${(o.plan.secondary?.targets||[]).filter(g=>g.crafts>0).map(g=>`<div class="automatic-output">${itemName(g.item_id,g.name)}<strong>${fmt(Math.floor(g.crafts))}</strong></div>`).join('')||'<p class="hint">No useful crafts found with these supplies.</p>'}</details><button type="button" class="primary" data-apply-automatic="${i}">Use this plan</button></section>`).join('')+'<p class="hint">*Whole items, rounded down. Finished crafts and ingredients crafted along the way are shown in the planner after applying. Equal options mean the search found no worthwhile improvement from another location.</p>';
+    break;
+   }
+   $('automaticStatus').textContent=job.message||'Trying leftover plans…';
+   await new Promise(r=>setTimeout(r,300));
+  }
+ }catch(e){if(token===automaticToken)$('automaticStatus').textContent=e.message.split('\n').filter(Boolean).at(-1);}
+ finally{if(token===automaticToken)$('runAutomatic').disabled=false;}
+};
+$('automaticReport').addEventListener('click',e=>{
+ const b=e.target.closest('[data-apply-automatic]');if(!b||!automaticResults)return;
+ if(revision!==automaticRevision){$('automaticStatus').textContent='Your plan changed. Run the comparison again.';return;}
+ const o=automaticResults.options[Number(b.dataset.applyAutomatic)];
+ state.secondary=o.goals.map(g=>({...g}));state.automatic_areas=[...o.areas];
+ $('automaticDialog').close();changed();
+});

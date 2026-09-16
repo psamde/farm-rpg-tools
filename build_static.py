@@ -20,6 +20,6 @@ def build():
     try: metadata=app.metadata()
     finally: app.pool.shutdown()
     (ROOT/'web/catalog.json').write_text(json.dumps({'metadata':metadata,'catalog':c},separators=(',',':')),encoding='utf8')
-    for name in ('planner.py','secondary.py','balanced.py','browser_engine.py','wasm_solver.py'):
+    for name in ('planner.py','secondary.py','balanced.py','browser_engine.py','wasm_solver.py','automatic.py'):
         (ROOT/'web'/name).write_bytes((ROOT/name).read_bytes())
 if __name__=='__main__':build()

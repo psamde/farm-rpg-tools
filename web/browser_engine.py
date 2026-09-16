@@ -39,7 +39,7 @@ def compute(catalog, payload, progress=lambda done,total: None, deferred=None):
     if payload.get('secondary'):
         for i, primary in enumerate(result['plans']):
             progress(0, None)
-            result['plans'][i] = consume_leftovers(catalog, primary, payload['secondary'], areas=payload['areas'], max_areas=payload.get('max_areas', 3), progress=lambda: progress(0, None), defer_comparison=deferred.append if deferred is not None else None)
+            result['plans'][i] = consume_leftovers(catalog, primary, payload['secondary'], areas=sorted((set(payload['automatic_areas']) & set(payload['areas']) if payload.get('automatic_areas') is not None else set(payload['areas'])) | {a['location_id'] for a in primary['areas']}), max_areas=payload.get('max_areas', 3), progress=lambda: progress(0, None), defer_comparison=deferred.append if deferred is not None else None)
     result['plans'].sort(key=lambda p: (p['optimal_total_explores'], len(p['areas'])))
     unique = {}
     for p in result['plans']:
@@ -50,3 +50,10 @@ def compute(catalog, payload, progress=lambda done,total: None, deferred=None):
     result['enumeration']['feasible_options'] = len(result['plans'])
     result['performance'] = dict(primary_cache_hit=hit, compute_seconds=time.perf_counter()-started)
     return result
+
+
+def automatic_compute(catalog, payload, progress=lambda message: None):
+    from automatic import maximize
+    baseline = compute(catalog, dict(payload, secondary=[]), lambda done,total: progress(f'Preparing primary route: {done} of {total}…' if total else 'Preparing primary route…'))
+    primary = next((p for p in baseline['plans'] if p['area_set_id']==payload.get('selected_plan_key')), baseline['plans'][0])
+    return maximize(catalog, primary, payload['areas'], payload.get('max_extra_locations',1), progress)

@@ -49,3 +49,8 @@ const preferred={...input,secondary:[{item_id:'craft',cap:5,allow_exploration:tr
 assert.equal(c.decodePlanCode(c.encodePlanCode(preferred)).secondary[0].prioritize,true);
 assert.throws(()=>c.decodePlanCode(c.encodePlanCode({...preferred,secondary:[{...preferred.secondary[0],prioritize:'yes'}]})));
 console.log('Explicit priorities survive saves; invalid priority values are rejected');
+const automaticSave={...input,automatic_areas:['area']};
+assert.deepEqual(Array.from(c.decodePlanCode(c.encodePlanCode(automaticSave)).automatic_areas),['area']);
+assert.equal(c.decodePlanCode(oldCode).automatic_areas,null);
+assert.throws(()=>c.decodePlanCode(c.encodePlanCode({...input,automatic_areas:['unknown']})));
+console.log('Automatic exploration scope survives saves; old saves remain unrestricted');
