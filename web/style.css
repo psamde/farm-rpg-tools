@@ -344,3 +344,8 @@ dialog,#suggestionsDialog{position:fixed;inset:0;margin:auto;max-height:calc(100
 .needs-actions button:not(.primary){border:1px solid var(--line);border-radius:7px;background:transparent;color:inherit;padding:10px 14px;cursor:pointer}
 .priority-warning{font-size:12px;line-height:1.7;border-left:3px solid #d5b978;padding:8px 12px;color:var(--text)}
 @media(max-width:800px){.leftover-priority::after{content:'Display order'}}
+.plan-actions{display:flex;align-items:flex-start;gap:12px;margin-bottom:24px}
+.plan-actions>.plansave{flex:1;min-width:0;margin-bottom:0}
+.clear-plan{flex:none;min-height:48px;padding:12px 18px;border:1px solid var(--line);border-radius:10px;color:var(--muted);background:transparent;cursor:pointer}
+.clear-plan:hover{color:var(--text);border-color:currentColor}
+@media(max-width:800px){.plan-actions{gap:8px}.clear-plan{padding:12px;min-height:44px}}

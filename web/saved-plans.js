@@ -43,6 +43,7 @@ function suggestedPlanName(settings,catalogItems){
   const backup=snapshot('Before loading '+p.name);if(backup.code!==p.code)plans.push(backup);
   p.updated=Date.now();write(plans);localStorage.setItem('farm-workshop-v1',JSON.stringify(restored));location.reload();
  });
+ window.addEventListener('planner-cleared',()=>act(()=>{refresh('');customName=false;name.value='';suggest();status.textContent='';}));
  window.addEventListener('storage',e=>{if(e.key===key)act(()=>refresh());});
  act(()=>refresh());suggest();
 })();

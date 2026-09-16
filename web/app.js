@@ -348,6 +348,17 @@ $('copyPlanCode').onclick=async()=>{try{if(!$('planCode').value)$('generatePlanC
 $('loadPlanCode').onclick=()=>{try{const restored=decodePlanCode($('planCode').value);localStorage.setItem('farm-workshop-v1',JSON.stringify(restored));location.reload();}catch(e){$('planCodeStatus').textContent=e.message;}};
 
 function resetEmptyPlan(){browserPlanner.cancel();result=null;selected=0;state.selected_plan=0;state.selected_plan_key="";save();lastSuccess=null;$('empty').hidden=false;$('resultContent').hidden=true;$('resultContent').classList.remove('stale');$('routePanel').hidden=true;$('status').textContent='Add a crafting or collection target to start.';$('compute').disabled=false;$('status').classList.remove('loading');$('implicitCrafts').innerHTML='';$('rawMaterials').innerHTML='';secondaryRows(false);}
+$('clearPlan').onclick=()=>{if(state)$('clearPlanDialog').showModal();};
+$('cancelClearPlan').onclick=()=>$('clearPlanDialog').close();
+$('confirmClearPlan').onclick=()=>{
+ clearTimeout(timer);revision++;
+ state.targets={};state.secondary=[];state.inventory='{}';state.passive_inventory='{}';
+ $('clearPlanDialog').close();error('');$('inventoryError').hidden=true;
+ for(const id of ['itemInput','inventoryItem','planCode'])$(id).value='';
+ $('planCodeStatus').textContent='';targets();inventoryRows();resetEmptyPlan();
+ if(state.planner_mode==='passive'){$('status').textContent='Add production amounts to start.';$('empty').querySelector('h2').textContent='Add production amounts to start.';}
+ window.dispatchEvent(new Event('planner-cleared'));
+};
 function plannerModeUI(){const passive=state.planner_mode==='passive';document.querySelectorAll('[data-planner-mode]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.plannerMode===state.planner_mode)));$('productionInterval').value=state.production_interval;$('primaryInputs').hidden=passive;$('passiveInputs').hidden=!passive;$(passive?'passiveInventoryHome':'startingInventoryHome').appendChild($('inventorySection'));$('inventorySection').open=passive;$('secondarySection').querySelector('h2').textContent=passive?'Use production for':'Explicitly use leftovers for';$('inventoryLabel').textContent=passive?'Production amounts per period':'Starting inventory';inventoryRows();}
 function blankModeSettings(current,mode){return {...JSON.parse(JSON.stringify(defaults)),theme:current.theme,planner_mode:mode,targets:{}};}
 function hasPlanContent(current){
