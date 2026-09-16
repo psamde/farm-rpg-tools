@@ -158,8 +158,9 @@ def consume(catalog, primary, goals, areas=None, max_areas=15, progress=None):
         # Direct intermediates are computed from a shared-stock LP, so existing
         # bottles count and overlapping raw ingredients are not spent twice.
         direct=[available(a)/needs[a] for a in items[r]['direct_ingredients'] if a in needs]
-        direct=[q for q in direct if q>1e-8]
-        references=direct or [pool[a]/q for a,q in needs.items() if q>0 and pool[a]>1e-8]
+        direct=[q for q in direct if q>=1-1e-8]
+        references=direct or [pool[a]/q for a,q in needs.items() if q>0 and pool[a]/q>=1-1e-8]
+        # Fractions too small for one craft are shortages to fill, not anchors.
         # Fill missing branches around the scarce existing input. An abundant
         # incidental drop must not inflate every recipe into an enormous goal.
         amount=min(references,default=0)
@@ -167,12 +168,6 @@ def consume(catalog, primary, goals, areas=None, max_areas=15, progress=None):
         scales[r]=amount
         if g['cap'] is not None: scales[r]=min(scales[r],g['cap'])
     x=utility(set(scales),scales,.25) if scales else solve(np.zeros(n))
-    used_new=[a for a,col in E.items() if a not in base_e and x[col]>1e-6]
-    if len(base_e)+len(used_new)>max_areas:
-        keep=set(sorted(used_new,key=lambda a:x[E[a]],reverse=True)[:max(0,max_areas-len(base_e))])
-        for a,col in E.items():
-            if a not in base_e and a not in keep: high[col]=0
-        x=utility(set(scales),scales,.25)
     extra_e={a:int(math.ceil(max(0,x[col])-1e-7)) for a,col in E.items()}
     for a,col in E.items(): low[col]=high[col]=extra_e[a]
     maxima={}

@@ -5,6 +5,8 @@ const fs=require('fs'),path=require('path'),assert=require('node:assert/strict')
  for(const name of ['planner.py','secondary.py','balanced.py','browser_engine.py','wasm_solver.py'])
   py.FS.writeFile('/home/pyodide/'+name,fs.readFileSync('web/'+name,'utf8'));
  for(const name of ['test_balanced.py','test_planner.py','farmdata.py']) py.FS.writeFile('/home/pyodide/'+name,fs.readFileSync(name,'utf8'));
+ py.FS.mkdirTree('/home/pyodide/data');
+ py.FS.writeFile('/home/pyodide/data/catalog.json',fs.readFileSync('data/catalog.json','utf8'));
  const highs=await require('./web/vendor/highs/highs.js')();
  py.globals.set('highs_solve',(lp,opts)=>JSON.stringify(highs.solve(lp,JSON.parse(opts))));
  py.globals.set('catalog_json',fs.readFileSync('data/catalog.json','utf8'));
@@ -16,7 +18,7 @@ install(highs_solve)
 from browser_engine import compute
 import unittest
 from test_balanced import BalancedTests
-suite=unittest.TestSuite(BalancedTests(name) for name in ['test_breadth_and_visual_reordering','test_explicit_priority_and_conflicts','test_disjoint_priorities_and_transitive_conflicts','test_automatic_exploration_ignores_legacy_focus'])
+suite=unittest.TestSuite(BalancedTests(name) for name in ['test_breadth_and_visual_reordering','test_explicit_priority_and_conflicts','test_disjoint_priorities_and_transitive_conflicts','test_automatic_exploration_ignores_legacy_focus','test_fractional_leftover_does_not_suppress_extra_exploration','test_potato_battery_energy_coil'])
 assert unittest.TextTestRunner().run(suite).wasSuccessful()
 catalog=json.loads(catalog_json)
 payload=json.loads(payload_json)

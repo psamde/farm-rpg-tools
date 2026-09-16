@@ -81,6 +81,29 @@ class BalancedTests(unittest.TestCase):
         self.assertEqual(r['optimal_total_explores'],p['optimal_total_explores'])
         self.balanced(r)
 
+    def test_fractional_leftover_does_not_suppress_extra_exploration(self):
+        c,p=self.fixture(); c['items']['6']['direct_ingredients']={'1':1,'2':1}
+        p=plan(c,'Target',1,inventory={'1':101,'2':0.003})
+        r=consume_leftovers(c,p,[{'item_id':'6','allow_exploration':True}])
+        self.assertAlmostEqual(r['secondary']['exploration_reference_crafts']['6'],100)
+        self.assertGreater(r['secondary']['targets'][0]['crafts'],1)
+        self.balanced(r)
+
+    def test_potato_battery_energy_coil(self):
+        c=json.loads(Path('data/catalog.json').read_text(encoding='utf8'))
+        areas=['explore:'+str(i) for i in range(1,10)]+['explore:13']
+        p=plan(c,{'754':10000},areas=areas,iron_depot=True,runecube=True,resource_saver=45)
+        rows=[{'item_id':r,'allow_exploration':True} for r in ['680','682']]
+        r=consume_leftovers(c,p,rows,areas=areas,max_areas=1)
+        counts={g['item_id']:g['crafts'] for g in r['secondary']['targets']}
+        self.assertGreater(counts['680'],1000)
+        self.assertEqual(counts['682'],0) # Whispering Creek is unchecked.
+        self.assertGreater(len(r['areas']),1) # Legacy area limit is ignored.
+        self.balanced(r)
+        r=consume_leftovers(c,p,rows,areas=areas+['explore:10'],max_areas=1)
+        self.assertTrue(all(g['crafts']>1000 for g in r['secondary']['targets']))
+        self.balanced(r)
+
     def test_cap_and_zero_cap(self):
         c,p=self.fixture()
         for cap in [0,10]:

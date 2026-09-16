@@ -11,6 +11,8 @@ from secondary import consume_leftovers
 def compute(catalog, payload, progress=lambda done,total: None, deferred=None):
     global _CACHE_CATALOG
     started = time.perf_counter()
+    # Old saved area limits no longer restrict either phase.
+    payload = dict(payload, max_areas=len(catalog['locations']))
     if _CACHE_CATALOG is not catalog:
         _PRIMARY_CACHE.clear()
         _CACHE_CATALOG = catalog

@@ -80,13 +80,10 @@ class Application:
             raise ValueError('Select at least one available area.')
         if not isinstance(payload.get('inventory', {}), dict):
             raise ValueError('Inventory must be a JSON object of item names or IDs and quantities.')
-        limit = payload.get('max_areas', 3)
         validate_secondary(self.catalog, payload.get('secondary', []))
         saver = payload.get('resource_saver', 0)
         if type(saver) not in (int, float) or not math.isfinite(saver) or not 0 <= saver <= 45:
             raise ValueError('Resource Saver must be a percentage from 0 to 45.')
-        if type(limit) is not int or not 1 <= limit <= 15:
-            raise ValueError('Maximum areas must be between 1 and 15.')
         key = uuid4().hex
         with self.lock:
             # Local single-user UI: replace pending work when the user changes targets.
@@ -113,16 +110,16 @@ class Application:
                           iron_depot=payload.get('iron_depot', False), runecube=payload.get('runecube', False),
                           resource_saver=payload.get('resource_saver', 0))
             if payload.get('planner_mode') == 'passive':
-                result = passive_plans(self.catalog, max_areas=payload.get('max_areas',3), **common)
+                result = passive_plans(self.catalog, max_areas=len(self.catalog['locations']), **common)
                 result['production_interval'] = payload.get('production_interval',60)
             else:
-                result = ranked_plans(self.catalog, payload['targets'], max_areas=payload.get('max_areas', 3),
+                result = ranked_plans(self.catalog, payload['targets'], max_areas=len(self.catalog['locations']),
                                       combinations_mode=payload.get('combinations_mode', False), progress=progress, **common)
             progress(job['done'], job['total'])
             if payload.get('secondary'):
                 for i, primary in enumerate(result['plans']):
                     progress(job['done'], job['total'])
-                    result['plans'][i] = consume_leftovers(self.catalog, primary, payload['secondary'], areas=payload['areas'], max_areas=payload.get('max_areas', 3), progress=lambda: progress(job['done'], job['total']))
+                    result['plans'][i] = consume_leftovers(self.catalog, primary, payload['secondary'], areas=payload['areas'], max_areas=len(self.catalog['locations']), progress=lambda: progress(job['done'], job['total']))
             result['plans'].sort(key=lambda p: (p['optimal_total_explores'], len(p['areas'])))
             unique = {}
             for p in result['plans']:

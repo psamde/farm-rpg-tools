@@ -19,12 +19,15 @@ class PrimaryCacheTests(unittest.TestCase):
             # Legacy saves cannot disable automatic caching.
             browser_engine.compute(catalog,{**payload,'performance':{'cache_primary':False,'reuse_models':True}})
             self.assertEqual(ranked.call_count,1)
-            for key,value in [('targets',{'Target':3}),('inventory',{'A':1}),('resource_saver',10),('max_areas',1)]:
+            for key,value in [('targets',{'Target':3}),('inventory',{'A':1}),('resource_saver',10)]:
                 result=browser_engine.compute(catalog,{**payload,key:value})
                 self.assertFalse(result['performance']['primary_cache_hit'])
+            legacy=browser_engine.compute(catalog,{**payload,'max_areas':1})
+            self.assertEqual(legacy['plans'],original)
+            self.assertTrue(legacy['performance']['primary_cache_hit'])
             count=ranked.call_count
             browser_engine.compute(catalog,{**payload,'performance':{}})
-            self.assertEqual(ranked.call_count,count+1)
+            self.assertEqual(ranked.call_count,count)
             result=browser_engine.compute(deepcopy(catalog),payload)
             self.assertFalse(result['performance']['primary_cache_hit'])
 
