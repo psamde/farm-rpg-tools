@@ -94,15 +94,49 @@ class ProcessorTests(unittest.TestCase):
         self.assertEqual(first, farmdata.process(snapshot))
         self.assertEqual(original, snapshot)
 
+    def test_split_sources_preserve_all_fields(self):
+        source_queries = {k:v for k,v in farmdata.QUERIES.items() if k.startswith('source_')}
+        self.assertEqual(set(source_queries), {'source_' + k for k in farmdata.SOURCE_FIELDS})
+        for key, query in source_queries.items():
+            self.assertIn(key.removeprefix('source_'), query)
+            self.assertEqual(query.count('{'), query.count('}'))
+
+    def test_retry_reports_failure_and_recovers(self):
+        import io
+        from contextlib import redirect_stderr
+        with patch.object(farmdata, 'urlopen', side_effect=[TimeoutError('slow'), TimeoutError('slow')]) as request, patch.object(farmdata.time, 'sleep'), redirect_stderr(io.StringIO()) as log:
+            with self.assertRaises(TimeoutError):
+                farmdata.graphql('{ items { id } }', farmdata.ENDPOINT)
+        self.assertEqual(request.call_count, 2)
+        self.assertIn('Retrying', log.getvalue())
+        self.assertIn('attempt 2/2', log.getvalue())
+
+    def test_quest_pages_merge_and_incomplete_pages_fail(self):
+        rows = [item(i, str(i)) for i in range(1, 152)]
+        def reply(query, endpoint):
+            if 'offset: 0' in query: return rows[:100]
+            if 'offset: 100' in query: return rows[100:]
+            return rows
+        with tempfile.TemporaryDirectory() as directory, patch.object(farmdata, 'graphql', side_effect=reply) as request:
+            result = farmdata.fetch(directory)
+            self.assertEqual(len(result['items']), 151)
+            self.assertEqual(request.call_count, len(farmdata.QUERIES)+1)
+        def incomplete(query, endpoint):
+            return rows[:50] if 'pagination:' in query else rows
+        with tempfile.TemporaryDirectory() as directory, patch.object(farmdata, 'graphql', side_effect=incomplete):
+            with self.assertRaisesRegex(ValueError, 'Item count changed'):
+                farmdata.fetch(directory)
+            self.assertFalse((Path(directory)/'snapshot.json').exists())
+
     def test_cache_reuse_and_refresh(self):
         with tempfile.TemporaryDirectory() as directory:
             with patch.object(farmdata, "graphql", return_value=[item(1, "Wood")]) as request:
                 farmdata.fetch(directory)
-                self.assertEqual(request.call_count, 3)
+                self.assertEqual(request.call_count, len(farmdata.QUERIES))
                 farmdata.fetch(directory)
-                self.assertEqual(request.call_count, 3)
+                self.assertEqual(request.call_count, len(farmdata.QUERIES))
                 farmdata.fetch(directory, refresh=True)
-                self.assertEqual(request.call_count, 6)
+                self.assertEqual(request.call_count, 2 * len(farmdata.QUERIES))
 
     def test_live_snapshot_regression_if_present(self):
         path = Path(__file__).parent / "cache" / "snapshot.json"

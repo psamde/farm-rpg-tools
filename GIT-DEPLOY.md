@@ -59,3 +59,8 @@ or a source-count drop over 5% require manual review. Inspect failed runs in
 Actions and enable GitHub Actions failure notifications for your account.
 GitHub may pause scheduled workflows after 60 days of repository inactivity;
 re-enable the schedule in Actions if that happens. Schedules can run late.
+
+The importer fetches source types separately and reads quest rewards in stable
+ID-ordered batches of 100 items. Requests use a 30-second socket timeout and at
+most one retry, with progress and timings in the Action log. All groups must
+contain the same item IDs before the snapshot is accepted.

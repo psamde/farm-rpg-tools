@@ -83,7 +83,7 @@ python farmdata.py explain "Sturdy Shield" --output data/sturdy-shield.json
 python -m unittest -v
 ```
 
-`build` fetches three public GraphQL queries, caches the responses, and writes `data/catalog.json`. Subsequent builds reuse the cache. To refresh the dataset:
+`build` fetches small public GraphQL queries (recipes, drops, and one per source type), caches the responses, and writes `data/catalog.json`. Subsequent builds reuse the cache. To refresh the dataset:
 
 ```powershell
 python farmdata.py build --refresh

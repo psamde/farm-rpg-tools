@@ -29,22 +29,21 @@ QUERIES = {
             seed { id name }
         }
     } } }""",
-    "sources": """{ items { id
-        petItems { level pet { id name } }
-        manualProductions { lineOne lineTwo value sort }
-        locksmithOutputItems { quantityMin quantityMax item { id name locksmithGrabBag locksmithKey { id name } } }
-        wishingWellOutputItems { chance inputItem { id name } }
-        exchangeCenterOutputs { lastSeen oneshot inputQuantity outputQuantity inputItem { id name } }
-        quizRewards { quantity score quiz { id name } }
-        npcRewards { level quantity npc { id name } }
-        passwordItems { quantity password { id } }
-        towerRewards { level itemQuantity }
-        skillLevelRewards { skill level itemQuantity }
-        rewardForQuests { quantity quest { id cleanTitle startDate endDate isHidden } }
-        cardsTrades { id isDisabled spadesQuantity heartsQuantity diamondsQuantity clubsQuantity jokerQuantity outputQuantity }
-        communityCenterOutputs { date inputQuantity outputQuantity progress inputItem { id name } }
-        templeRewardItems { id quantity templeReward { inputQuantity inputItem { id name } } }
-    } }""",
+    "source_petItems": """{ items { id petItems { level pet { id name } } } }""",
+    "source_manualProductions": """{ items { id manualProductions { lineOne lineTwo value sort } } }""",
+    "source_locksmithOutputItems": """{ items { id locksmithOutputItems { quantityMin quantityMax item { id name locksmithGrabBag locksmithKey { id name } } } } }""",
+    "source_wishingWellOutputItems": """{ items { id wishingWellOutputItems { chance inputItem { id name } } } }""",
+    "source_exchangeCenterOutputs": """{ items { id exchangeCenterOutputs { lastSeen oneshot inputQuantity outputQuantity inputItem { id name } } } }""",
+    "source_quizRewards": """{ items { id quizRewards { quantity score quiz { id name } } } }""",
+    "source_npcRewards": """{ items { id npcRewards { level quantity npc { id name } } } }""",
+    "source_passwordItems": """{ items { id passwordItems { quantity password { id } } } }""",
+    "source_towerRewards": """{ items { id towerRewards { level itemQuantity } } }""",
+    "source_skillLevelRewards": """{ items { id skillLevelRewards { skill level itemQuantity } } }""",
+    "source_rewardForQuests": """{ items { id rewardForQuests { quantity quest { id cleanTitle startDate endDate isHidden } } } }""",
+    "source_cardsTrades": """{ items { id cardsTrades { id isDisabled spadesQuantity heartsQuantity diamondsQuantity clubsQuantity jokerQuantity outputQuantity } } }""",
+    "source_communityCenterOutputs": """{ items { id communityCenterOutputs { date inputQuantity outputQuantity progress inputItem { id name } } } }""",
+    "source_templeRewardItems": """{ items { id templeRewardItems { id quantity templeReward { inputQuantity inputItem { id name } } } } }""",
+
 }
 SOURCE_FIELDS = {
     "petItems": "pet", "manualProductions": "manual_production",
@@ -80,35 +79,51 @@ def graphql(query, endpoint):
         "User-Agent": "FarmData/1.0 (local FarmRPG reference-data processor)",
         "Accept": "application/json",
     })
-    for attempt in range(3):
+    for attempt in range(2):
+        started = time.monotonic()
+        print(f"  Request attempt {attempt+1}/2 (30s timeout)", file=sys.stderr, flush=True)
         try:
-            with urlopen(request, timeout=120) as response:
+            with urlopen(request, timeout=30) as response:
                 result = json.load(response)
             if result.get("errors"):
                 raise ValueError("GraphQL errors: " + json.dumps(result["errors"]))
             rows = result["data"]["items"]
             if not isinstance(rows, list) or not rows:
                 raise ValueError("API returned no items")
+            print(f"  Received {len(rows)} items in {time.monotonic()-started:.1f}s", file=sys.stderr, flush=True)
             return rows
         except HTTPError as error:
-            if error.code not in (429, 500, 502, 503, 504) or attempt == 2:
+            if error.code not in (429, 500, 502, 503, 504) or attempt == 1:
                 raise
-        except (URLError, TimeoutError):
-            if attempt == 2:
+        except (URLError, TimeoutError) as error:
+            print(f"  Request failed: {error}", file=sys.stderr, flush=True)
+            if attempt == 1:
                 raise
+        print("  Retrying shortly…", file=sys.stderr, flush=True)
         time.sleep(2 ** attempt)
 
 
 def fetch(cache, endpoint=ENDPOINT, refresh=False):
     cache = Path(cache)
     groups, manifest = {}, []
-    for name, query in QUERIES.items():
+    for index, (name, query) in enumerate(QUERIES.items(), 1):
         path = cache / (name + ".json")
         key = digest({"query": query, "endpoint": endpoint})
         part = read_json(path) if path.exists() and not refresh else None
         if part is None or part.get("query_hash") != key:
-            print("Fetching " + name + "...", file=sys.stderr, flush=True)
-            rows = graphql(query, endpoint)
+            print(f"Fetching {index}/{len(QUERIES)}: {name}...", file=sys.stderr, flush=True)
+            if name == 'source_rewardForQuests':
+                rows = []
+                count = len(groups['recipes'])
+                for offset in range(0, count, 100):
+                    print(f"  Quest rewards: items {offset+1}-{min(offset+100,count)} of {count}", file=sys.stderr, flush=True)
+                    page = query.replace('items {', f'items(order: {{id: ASC}}, pagination: {{offset: {offset}, limit: 100}}) {{', 1)
+                    batch = graphql(page, endpoint)
+                    if len(batch) != min(100, count-offset):
+                        raise ValueError('Item count changed during paginated fetch; retry refresh')
+                    rows.extend(batch)
+            else:
+                rows = graphql(query, endpoint)
             part = {"query_hash": key, "endpoint": endpoint,
                     "fetched_at": datetime.now(timezone.utc).isoformat(), "items": rows}
             write_json(path, part)

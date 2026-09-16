@@ -31,7 +31,7 @@ jobs:
         run: python refresh_data.py
       - name: Test before publishing
         run: |
-          python -m unittest test_refresh_data test_planner test_secondary test_balanced test_external test_passive test_primary_cache test_guided test_cockatrice
+          python -m unittest test_refresh_data test_farmdata test_planner test_secondary test_balanced test_external test_passive test_primary_cache test_guided test_cockatrice
           node test_save.cjs
           node test_craft_map.cjs
           node test_map_supply.cjs
