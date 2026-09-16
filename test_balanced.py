@@ -104,6 +104,16 @@ class BalancedTests(unittest.TestCase):
         self.assertTrue(all(g['crafts']>1000 for g in r['secondary']['targets']))
         self.balanced(r)
 
+    def test_automatic_batch_is_not_shrunk_to_scarce_existing_input(self):
+        c,p=self.fixture(); c['items']['6']['direct_ingredients']={'1':1,'2':1}
+        p=plan(c,'Target',1,inventory={'1':101,'2':1})
+        regular=consume_leftovers(c,p,[{'item_id':'6','allow_exploration':True,'cap':80}])
+        automatic=consume_leftovers(c,p,[{'item_id':'6','allow_exploration':True,'cap':80,'automatic_batch':True}])
+        self.assertEqual(automatic['secondary']['exploration_reference_crafts']['6'],80)
+        self.assertGreater(automatic['secondary']['targets'][0]['crafts'],regular['secondary']['targets'][0]['crafts'])
+        self.assertLessEqual(automatic['secondary']['targets'][0]['crafts'],80)
+        self.balanced(automatic)
+
     def test_cap_and_zero_cap(self):
         c,p=self.fixture()
         for cap in [0,10]:

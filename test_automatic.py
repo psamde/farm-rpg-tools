@@ -20,14 +20,14 @@ class AutomaticTests(unittest.TestCase):
   self.assertEqual(p,original)
   for option in r['options']:
    m=option['metrics'];self.assertLessEqual(len(m['new_locations']),option['max_extra_locations'])
-   self.assertLessEqual(r['plans_checked'],1000)
+   self.assertLessEqual(r['plans_checked'],4000)
    again=consume_leftovers(c,p,option['goals'],areas=option['areas'])
    self.assertEqual(again,option['plan'])
    for b in option['plan']['item_balances']:
     self.assertAlmostEqual(b['starting_inventory']+b['expected_exploration_drops']+b['crafted']+b['free_perk_supply'],b['consumed_by_crafting']+b['expected_final_inventory'])
   self.assertEqual(r['options'][0]['metrics']['extra_explores'],0)
   self.assertEqual(r['options'][1]['metrics']['crafted_types'],0)
-  self.assertGreater(r['options'][2]['metrics']['crafted_types'],0)
+  self.assertGreater(r['options'][-1]['metrics']['crafted_types'],0)
  def test_unavailable_location_and_external_ingredients(self):
   c,p=self.fixture()
   r=maximize(c,p,['joint'],1)

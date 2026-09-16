@@ -12,15 +12,17 @@ from test_automatic import AutomaticTests
 assert unittest.TextTestRunner().run(unittest.defaultTestLoader.loadTestsFromTestCase(AutomaticTests)).wasSuccessful()
 from browser_engine import compute,automatic_compute
 c=json.loads(catalog_json)
-payload=dict(targets={'754':10000},areas=['explore:'+str(i) for i in range(1,11)]+['explore:13'],iron_depot=True,runecube=True,resource_saver=45,max_extra_locations=1)
+payload=dict(targets={'754':1000},areas=['explore:'+str(i) for i in range(1,11)]+['explore:13'],iron_depot=True,runecube=True,resource_saver=45,max_extra_locations=1)
 r=automatic_compute(c,payload)
+assert max(o['metrics']['materials_used_fraction'] for o in r['options'])>.5
+assert all(abs(sum(m['used'] for m in o['metrics']['original_materials'])-o['metrics']['materials_used'])<1e-6 for o in r['options'])
 for o in r['options']:
     assert len(o['metrics']['new_locations'])<=o['max_extra_locations']
-    assert r['plans_checked']<=1000
+    assert r['plans_checked']<=4000
     applied=compute(c,dict(payload,secondary=o['goals'],automatic_areas=o['areas']))
     p=next(p for p in applied['plans'] if p['area_set_id']==o['plan']['area_set_id'])
     assert p['optimal_total_explores']==o['plan']['optimal_total_explores']
     assert [(g['item_id'],g['crafts']) for g in p.get('secondary',{}).get('targets',[])]==[(g['item_id'],g['crafts']) for g in o['plan'].get('secondary',{}).get('targets',[])]
-json.dumps({'plans_checked':r['plans_checked'],'options':[o['metrics'] for o in r['options']]})
+json.dumps({'plans_checked':r['plans_checked'],'options':[{k:v for k,v in o['metrics'].items() if k!='original_materials'} for o in r['options']]})
 `));
 })().catch(e=>{console.error(e);process.exitCode=1});

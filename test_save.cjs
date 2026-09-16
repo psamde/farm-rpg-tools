@@ -54,3 +54,7 @@ assert.deepEqual(Array.from(c.decodePlanCode(c.encodePlanCode(automaticSave)).au
 assert.equal(c.decodePlanCode(oldCode).automatic_areas,null);
 assert.throws(()=>c.decodePlanCode(c.encodePlanCode({...input,automatic_areas:['unknown']})));
 console.log('Automatic exploration scope survives saves; old saves remain unrestricted');
+const automaticBatch={...input,secondary:[{item_id:'craft',cap:50,allow_exploration:true,automatic_batch:true}]};
+assert.equal(c.decodePlanCode(c.encodePlanCode(automaticBatch)).secondary[0].automatic_batch,true);
+assert.throws(()=>c.decodePlanCode(c.encodePlanCode({...automaticBatch,secondary:[{...automaticBatch.secondary[0],automatic_batch:'yes'}]})));
+console.log('Automatic batches retain their selected exploration aim in saves');

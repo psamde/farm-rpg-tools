@@ -164,6 +164,10 @@ def consume(catalog, primary, goals, areas=None, max_areas=15, progress=None):
         # Fill missing branches around the scarce existing input. An abundant
         # incidental drop must not inflate every recipe into an enormous goal.
         amount=min(references,default=0)
+        # Automatic search has explicitly compared this finite batch against
+        # its exploration cost. Do not silently shrink it to a scarce input.
+        if g.get('automatic_batch') and g['cap'] is not None:
+            amount=g['cap']
         if amount<1e-8: continue
         scales[r]=amount
         if g['cap'] is not None: scales[r]=min(scales[r],g['cap'])
