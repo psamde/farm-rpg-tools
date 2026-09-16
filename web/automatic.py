@@ -4,6 +4,8 @@ from functools import lru_cache
 import math
 from secondary import consume_leftovers
 
+SEARCH_LIMIT = 1000
+
 
 def maximize(catalog, primary, areas, max_extra=1, progress=lambda message: None):
     if type(max_extra) is not int or not 0 <= max_extra <= 15:
@@ -26,7 +28,7 @@ def maximize(catalog, primary, areas, max_extra=1, progress=lambda message: None
     initial_crafted={b['item_id']:b['crafted'] for b in primary['item_balances']}
     excluded={t['item_id'] for t in primary['targets']} | free
     replacement=sum(q/max((v[r] for v in rates.values()),default=0) for r,q in original.items() if max((v[r] for v in rates.values()),default=0)>0)
-    budget=math.floor(.1*(primary['optimal_total_explores'] or replacement))
+    explore_scale=max(1,primary['optimal_total_explores'] or replacement)
     @lru_cache(None)
     def ingredients(r):
         out=Counter()
@@ -41,7 +43,7 @@ def maximize(catalog, primary, areas, max_extra=1, progress=lambda message: None
         new=set(a['location_id'] for a in p['areas'])-base
         quantity=sum(used.values()); shares=sum(used.get(r,0)/q for r,q in original.items())/max(1,len(original))
         breadth=sum(t['crafts']>=1 for t in p.get('secondary',{}).get('targets',[]))
-        score=quantity/total+shares+.015*min(breadth,12)-.4*extra/max(1,budget)-.06*len(new)
+        score=quantity/total+shares+.015*min(breadth,12)-.25*extra/explore_scale-.06*len(new)
         return dict(score=score,materials_used=quantity,material_types_used=sum(q>=1 for q in used.values()),extra_explores=extra,new_locations=sorted(new),crafted_types=breadth)
     def proposals(p,goals,locations,assist):
         stock={b['item_id']:max(0,b.get('expected_unused',b['expected_final_inventory']-b['reserved_target_output'])) for b in p['item_balances']}
@@ -72,25 +74,16 @@ def maximize(catalog, primary, areas, max_extra=1, progress=lambda message: None
                 mid=(low+high+1)//2
                 if simulate(r,mid)[1]:high=mid-1
                 else:low=mid
-            affordable=low
-            if assist:
-                lo,hi=low,bound
-                while lo<hi:
-                    mid=(lo+hi+1)//2;_,missing=simulate(r,mid)
-                    cost=sum(q/best_rates[a] for a,q in missing.items() if best_rates[a]>0)
-                    if any(best_rates[a]<=0 for a in missing) or cost>budget:hi=mid-1
-                    else:lo=mid
-                affordable=lo
-            counts={low} if not assist else {low,*[math.floor(affordable*f) for f in (.1,.5,1)]}
+            counts={low} if not assist else {low,*[math.floor(bound*f) for f in (.02,.1,.5,1)]}
             for count in counts:
                 if not count:continue
                 used,missing=simulate(r,count)
                 if any(best_rates[a]<=0 for a in missing):continue
                 estimate=sum(q/best_rates[a] for a,q in missing.items())
-                if estimate>budget or (missing and not assist):continue
+                if missing and not assist:continue
                 gain=sum(min(original.get(a,0),q) for a,q in used.items())/total
                 gain+=sum(min(original.get(a,0),q)/original[a] for a,q in used.items() if a in original)/max(1,len(original))
-                gain-=.4*estimate/max(1,budget)
+                gain-=.25*estimate/explore_scale
                 if gain>1e-8:candidates.append((gain,r,count,bool(missing)))
         candidates.sort(key=lambda t:(-t[0],t[1],t[2]))
         # Evaluate a diverse shortlist, not four batch sizes of the same craft.
@@ -107,18 +100,20 @@ def maximize(catalog, primary, areas, max_extra=1, progress=lambda message: None
         if key in cache:return cache[key]
         goals=[];current=primary;best=metrics(current)
         for step in range(len(goals),12):
+            if tested>=SEARCH_LIMIT:break
             winner=None
             for candidate in proposals(current,goals,locations,assist):
                 trial=goals+[candidate]
                 signature=(tuple((g['item_id'],g['cap'],g['allow_exploration']) for g in trial),tuple(sorted(locations)) if any(g['allow_exploration'] for g in trial) else ())
                 if signature not in evaluated:
-                    tested+=1;progress(f'Trying leftover crafts: {tested} plans checked…')
+                    if tested>=SEARCH_LIMIT:break
+                    tested+=1;progress(f'Trying leftover crafts: {tested} of up to {SEARCH_LIMIT} plans…')
                     try:evaluated[signature]=consume_leftovers(catalog,primary,trial,areas=sorted(locations))
                     except ValueError:evaluated[signature]=None
                 p=evaluated[signature]
                 if p is None:continue
                 m=metrics(p)
-                if m['extra_explores']>budget or len(m['new_locations'])>max_extra+1:continue
+                if len(m['new_locations'])>max_extra+1:continue
                 if m['score']>best['score']+1e-6:
                     best=m;winner=(p,candidate)
             if winner is None:break
@@ -148,4 +143,4 @@ def maximize(catalog, primary, areas, max_extra=1, progress=lambda message: None
         return dict(label=label,max_extra_locations=limit,**entry)
     requested=levels[max(k for k in levels if k<=max_extra)]
     extra=levels[max(levels)]
-    return dict(options=[option('No extra exploring',0,ready),option('Your location limit',max_extra,requested),option('One more location',max_extra+1,extra)],baseline_explores=primary['optimal_total_explores'],extra_explore_budget=budget,plans_checked=tested,heuristic=True)
+    return dict(options=[option('No extra exploring',0,ready),option('Your location limit',max_extra,requested),option('One more location',max_extra+1,extra)],baseline_explores=primary['optimal_total_explores'],search_limit=SEARCH_LIMIT,search_limit_reached=tested>=SEARCH_LIMIT,plans_checked=tested,heuristic=True)

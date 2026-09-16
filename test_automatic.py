@@ -14,13 +14,13 @@ class AutomaticTests(unittest.TestCase):
   c['sources']['joint4']['expected_drops_per_explore']=1
   c['sources']['b2']['expected_drops_per_explore']=100
   return c,plan(c,'Target',100,areas=['joint'])
- def test_limits_budget_physical_balance_and_reproduction(self):
+ def test_limits_search_bound_physical_balance_and_reproduction(self):
   c,p=self.fixture();original=deepcopy(p)
   r=maximize(c,p,['joint','b'],0)
   self.assertEqual(p,original)
   for option in r['options']:
    m=option['metrics'];self.assertLessEqual(len(m['new_locations']),option['max_extra_locations'])
-   self.assertLessEqual(m['extra_explores'],r['extra_explore_budget'])
+   self.assertLessEqual(r['plans_checked'],1000)
    again=consume_leftovers(c,p,option['goals'],areas=option['areas'])
    self.assertEqual(again,option['plan'])
    for b in option['plan']['item_balances']:
@@ -36,6 +36,18 @@ class AutomaticTests(unittest.TestCase):
   c['items']['5']['direct_ingredients']['8']=1
   r=maximize(c,p,['joint','b'],1)
   self.assertTrue(all(not o['goals'] for o in r['options']))
+ def test_more_than_ten_percent_extra_explores_can_win(self):
+  c,p=self.fixture();c['sources']['b2']['expected_drops_per_explore']=2
+  r=maximize(c,p,['joint','b'],1)
+  self.assertGreater(r['options'][1]['metrics']['extra_explores'],p['optimal_total_explores']*.1)
+  self.assertGreater(r['options'][1]['metrics']['materials_used'],r['options'][0]['metrics']['materials_used'])
+ def test_search_stops_at_evaluation_limit(self):
+  from unittest.mock import patch
+  c,p=self.fixture()
+  with patch('automatic.SEARCH_LIMIT',1):r=maximize(c,p,['joint','b'],1)
+  self.assertEqual(r['plans_checked'],1)
+  self.assertTrue(r['search_limit_reached'])
+
  def test_invalid_limit(self):
   c,p=self.fixture()
   for n in [-1,16,True,1.5]:

@@ -16,7 +16,7 @@ payload=dict(targets={'754':10000},areas=['explore:'+str(i) for i in range(1,11)
 r=automatic_compute(c,payload)
 for o in r['options']:
     assert len(o['metrics']['new_locations'])<=o['max_extra_locations']
-    assert o['metrics']['extra_explores']<=r['extra_explore_budget']
+    assert r['plans_checked']<=1000
     applied=compute(c,dict(payload,secondary=o['goals'],automatic_areas=o['areas']))
     p=next(p for p in applied['plans'] if p['area_set_id']==o['plan']['area_set_id'])
     assert p['optimal_total_explores']==o['plan']['optimal_total_explores']
