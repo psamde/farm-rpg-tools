@@ -37,3 +37,7 @@
 .map-fullscreen>.map-footer{position:relative;background:inherit;margin:0;padding-top:12px}
 
 .map-intro{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;color:var(--muted)}.map-help{position:relative;margin:0;padding:0;border:0}.map-help summary{font-size:12px;cursor:pointer}.map-help[open]{flex-basis:100%}.map-help p{max-width:850px;font-size:12px;margin:6px 0}.map-inspector>label{display:block;margin:12px 0 6px}.map-inspector>label input{margin-top:6px}.map-inspector>button{margin-top:4px}
+
+.map-inventory-supply{border:1px solid var(--line);border-radius:8px;padding:10px;margin:12px 0;display:grid;grid-template-columns:1fr 1fr;gap:8px}.map-inventory-supply label,.map-inventory-supply small{grid-column:1/-1}.map-inventory-supply small{color:var(--muted);font-size:11px}.map-inventory-supply input{min-width:0}
+
+.map-display-settings #mapUnusedMode{width:auto;flex:none}.craft-map #mapUnusedMode button{border:0;background:transparent;color:var(--muted);padding:6px 12px;min-height:32px}.craft-map #mapUnusedMode button[aria-pressed="true"]{background:var(--green);color:white}[data-theme=dark] .craft-map #mapUnusedMode button[aria-pressed="true"]{background:#c6ef91;color:#19382c}#mapUnusedLabel{font-size:12px}

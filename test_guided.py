@@ -72,6 +72,16 @@ class GuidedTests(unittest.TestCase):
         applied=compute(c,dict(payload,secondary=[]))['plans'][0]
         self.assertEqual(preview['total_explores'],applied['optimal_total_explores'])
 
+    def test_inventory_can_supply_missing_leftover_without_extra_location(self):
+        c,_=AutomaticTests().fixture()
+        goal=dict(item_id='5',cap=100,allow_exploration=False,automatic_batch=True)
+        payload=dict(targets={'3':100},areas=['joint'],secondary=[],chosen_goals=[goal],inventory={'2':100})
+        preview=guided_compute(c,payload)
+        self.assertEqual(preview['outputs'][0]['crafts'],100)
+        self.assertEqual(preview['extra_explores'],0)
+        self.assertEqual(preview['new_locations'],[])
+        self.assertEqual(next(b for b in preview['preview_plan']['item_balances'] if b['item_id']=='2')['starting_inventory'],100)
+
     def test_quest_order_and_stable_item_ids(self):
         q=lambda id:dict(id=id,cleanTitle='Step '+str(id),requiredItems=[dict(quantity=3,item=dict(id=40,name='Stone'))])
         rows=normalize({'data':{'questlines':[dict(id=2,title='A quest',steps=[dict(order=2,quest=q(2)),dict(order=1,quest=q(1))])]}})

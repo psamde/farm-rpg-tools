@@ -8,6 +8,7 @@ from threading import Lock
 from urllib.parse import urlsplit
 from uuid import uuid4
 
+from browser_engine import catalog_with_perks
 from farmdata import read_json
 from planner import plan, ranked_plans, resolve, exploration_target_ids, passive_plans
 from secondary import validate_secondary, consume_leftovers
@@ -74,7 +75,7 @@ class Application:
                 raise ValueError('Craft quantities must be whole numbers from 1 to 100,000,000.')
             if not self.catalog['items'][resolve(self.catalog['items'], key)]['craftable'] and resolve(self.catalog['items'], key) not in exploration_target_ids(self.catalog):
                 raise ValueError('Targets must be craftable or directly obtainable from exploration.')
-        for name in ('iron_depot', 'runecube', 'combinations_mode'):
+        for name in ('iron_depot', 'runecube', 'cockatrice_ether_source', 'combinations_mode'):
             if type(payload.get(name, False)) is not bool:
                 raise ValueError('Invalid option: ' + name)
         if not isinstance(payload.get('areas'), list) or not payload['areas']:
@@ -99,6 +100,7 @@ class Application:
         return {'job_id': key}
 
     def compute(self, key, payload):
+        catalog = catalog_with_perks(self.catalog, payload)
         job = self.jobs[key]
         def progress(done, total):
             if job['cancelled']:
@@ -111,16 +113,16 @@ class Application:
                           iron_depot=payload.get('iron_depot', False), runecube=payload.get('runecube', False),
                           resource_saver=payload.get('resource_saver', 0))
             if payload.get('planner_mode') == 'passive':
-                result = passive_plans(self.catalog, max_areas=len(self.catalog['locations']), **common)
+                result = passive_plans(catalog, max_areas=len(self.catalog['locations']), **common)
                 result['production_interval'] = payload.get('production_interval',60)
             else:
-                result = ranked_plans(self.catalog, payload['targets'], max_areas=len(self.catalog['locations']),
+                result = ranked_plans(catalog, payload['targets'], max_areas=len(self.catalog['locations']),
                                       combinations_mode=payload.get('combinations_mode', False), progress=progress, **common)
             progress(job['done'], job['total'])
             if payload.get('secondary'):
                 for i, primary in enumerate(result['plans']):
                     progress(job['done'], job['total'])
-                    result['plans'][i] = consume_leftovers(self.catalog, primary, payload['secondary'], areas=payload['areas'], max_areas=len(self.catalog['locations']), progress=lambda: progress(job['done'], job['total']))
+                    result['plans'][i] = consume_leftovers(catalog, primary, payload['secondary'], areas=payload['areas'], max_areas=len(self.catalog['locations']), progress=lambda: progress(job['done'], job['total']))
             result['plans'].sort(key=lambda p: (p['optimal_total_explores'], len(p['areas'])))
             unique = {}
             for p in result['plans']:

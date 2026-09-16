@@ -39,7 +39,7 @@ function buildCraftMap(items,plan,settings,drafts=[],expanded=[]){
  for(const area of plan.areas)if((settings.map_expanded_areas||[]).includes(area.location_id))
   for(const output of area.items)if(output.expected_drops>0&&spareIds.has(output.item_id))seen.add(output.item_id);
  expanded.forEach(id=>{if(items[id])seen.add(id);});
- for(const id of seen){const b=balances[id]||{};nodes.set(id,{id,kind:'item',name:items[id].name,primary:Object.hasOwn(settings.targets||{},id),secondary:(settings.secondary||[]).some(g=>g.item_id===id),draft:drafts.some(g=>g.item_id===id),missing:missing[id]||0,need:demand[id]||0,crafts:(b.crafted||0)/items[id].output_quantity+(draftCrafts[id]||0),draftCrafts:draftCrafts[id]||0,stock:Math.max(0,(b.expected_unused||0)+(draftCrafts[id]||0)*items[id].output_quantity-(demand[id]||0)),currentStock:Math.max(0,b.expected_unused||0),explorationSupplied:plan.areas.some(a=>a.items.some(o=>o.item_id===id&&o.expected_drops>0)),protected:protectedIds.has(id),voided:(settings.map_voided||[]).includes(id),useVoid:(settings.map_use_void||[]).includes(id),free:free(id),depth:1});}
+ for(const id of seen){const b=balances[id]||{};nodes.set(id,{id,kind:'item',name:items[id].name,primary:Object.hasOwn(settings.targets||{},id),secondary:(settings.secondary||[]).some(g=>g.item_id===id),draft:drafts.some(g=>g.item_id===id),missing:missing[id]||0,need:demand[id]||0,crafts:(b.crafted||0)/items[id].output_quantity+(draftCrafts[id]||0),draftCrafts:draftCrafts[id]||0,stock:Math.max(0,(b.expected_unused||0)+(draftCrafts[id]||0)*items[id].output_quantity-(demand[id]||0)),fromInventory:(b.starting_inventory||0)>0,currentStock:Math.max(0,b.expected_unused||0),totalSupply:Math.max(b.expected_unused||0,(b.starting_inventory||0)+(b.expected_exploration_drops||0)+(b.free_perk_supply||0)+(b.crafted||0))+(draftCrafts[id]||0)*items[id].output_quantity,explorationSupplied:plan.areas.some(a=>a.items.some(o=>o.item_id===id&&o.expected_drops>0)),protected:protectedIds.has(id),voided:(settings.map_voided||[]).includes(id),useVoid:(settings.map_use_void||[]).includes(id),free:free(id),depth:1});}
  const blockedMemo=new Map();
  function blocked(id,threshold=1e-8){const key=id+':'+threshold;if(blockedMemo.has(key))return blockedMemo.get(key);const value=!free(id)&&Boolean((missing[id]||0)>=threshold||crafted(id)>1e-8&&Object.keys(items[id].direct_ingredients).some(child=>blocked(child,threshold)));blockedMemo.set(key,value);return value;}
  for(const node of nodes.values()){node.blocked=blocked(node.id);node.warningBlocked=blocked(node.id,10);}
@@ -157,7 +157,7 @@ if(typeof module!=='undefined')Object.assign(module.exports,{craftMapAddOptions,
 
 function craftMapNodeLabels(n,nodes,links){
  const required=Boolean(n.protected||n.primary||(n.kind!=='item'&&links.some(l=>l.from===n.id&&nodes.some(child=>child.id===l.to&&child.protected))));
- return {requirement:n.explorationSupplied?'EXPLORE OUTPUT NODE':required?'REQUIRED NODE':'OPTIONAL NODE',mode:n.voided?'Void/Sell':n.useVoid?'Use + Void':''};
+ return {requirement:n.explorationSupplied?'EXPLORE OUTPUT NODE':required?'REQUIRED NODE':'OPTIONAL NODE',mode:n.voided?'Void/Sell':n.useVoid?'Use + Void':n.fromInventory?'FROM INVENTORY':''};
 }
 if(typeof module!=='undefined')module.exports.craftMapNodeLabels=craftMapNodeLabels;
 

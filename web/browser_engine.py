@@ -8,8 +8,30 @@ _CACHE_CATALOG = None
 from planner import ranked_plans, passive_plans
 from secondary import consume_leftovers
 
+# Match bbybxx/farm src/utils/exploringUtils.js Cockatrice effect.
+COCKATRICE_ITEMS = frozenset(('Fire Ant', 'Caterpillar', 'Spider', 'Horned Beetle',
+    'Shiny Beetle', 'Snail', 'Giant Centipede', 'Ruby Scorpion', 'Onyx Scorpion'))
+_PERK_CATALOG = (None, None)
+
+def catalog_with_perks(catalog, payload):
+    """Boost yields, not probabilities; never mutate or repeatedly boost base data."""
+    global _PERK_CATALOG
+    if not payload.get('cockatrice_ether_source') or catalog.get('_cockatrice_applied'):
+        return catalog
+    if _PERK_CATALOG[0] is catalog:
+        return _PERK_CATALOG[1]
+    boosted = dict(catalog, sources={
+        key: dict(source, expected_drops_per_explore=source['expected_drops_per_explore'] * 2)
+        if source.get('kind') == 'explore' and source.get('expected_drops_per_explore') is not None
+        and catalog['items'][source['item_id']]['name'] in COCKATRICE_ITEMS else source
+        for key, source in catalog['sources'].items()}, _cockatrice_applied=True)
+    _PERK_CATALOG = (catalog, boosted)
+    return boosted
+
+
 def compute(catalog, payload, progress=lambda done,total: None, deferred=None):
     global _CACHE_CATALOG
+    catalog = catalog_with_perks(catalog, payload)
     started = time.perf_counter()
     # Old saved area limits no longer restrict either phase.
     payload = dict(payload, max_areas=len(catalog['locations']))
@@ -56,6 +78,7 @@ def compute(catalog, payload, progress=lambda done,total: None, deferred=None):
 
 def automatic_compute(catalog, payload, progress=lambda message: None):
     from automatic import maximize
+    catalog = catalog_with_perks(catalog, payload)
     baseline = compute(catalog, dict(payload, secondary=[]), lambda done,total: progress(f'Preparing primary route: {done} of {total}…' if total else 'Preparing primary route…'))
     primary = next((p for p in baseline['plans'] if p['area_set_id']==payload.get('selected_plan_key')), baseline['plans'][0])
     return maximize(catalog, primary, payload['areas'], payload.get('max_extra_locations',1), progress)
@@ -63,6 +86,7 @@ def automatic_compute(catalog, payload, progress=lambda message: None):
 
 def guided_compute(catalog, payload, progress=lambda message: None):
     """Evaluate alternatives independently against the same primary/shared pool."""
+    catalog = catalog_with_perks(catalog, payload)
     progress('Preparing the primary route (reusing it when cached)…')
     baseline = compute(catalog, dict(payload, secondary=[]), lambda done,total: progress(f'Checking primary routes: {done}…') if done else None)
     primary = next((p for p in baseline['plans'] if p['area_set_id']==payload.get('selected_plan_key')), baseline['plans'][0])
