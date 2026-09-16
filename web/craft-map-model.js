@@ -6,9 +6,6 @@ function buildCraftMap(items,plan,settings,drafts=[],expanded=[]){
  const order=[],seen=new Set();
  function visit(id){if(seen.has(id)||!items[id])return;seen.add(id);if(!free(id))for(const child of Object.keys(items[id].direct_ingredients))visit(child);order.push(id);}
  roots.forEach(visit);
- const protectedIds=new Set();
- function protect(id){if(protectedIds.has(id)||!items[id])return;protectedIds.add(id);if(!free(id))Object.keys(items[id].direct_ingredients).forEach(protect);}
- Object.keys(settings.targets||{}).forEach(protect);
  const draftCrafts={},demand={},missing={};
  for(const g of drafts)draftCrafts[g.item_id]=g.cap;
  // All parent demands accumulate before a shared ingredient is evaluated.
@@ -21,16 +18,33 @@ function buildCraftMap(items,plan,settings,drafts=[],expanded=[]){
    for(const [child,q] of Object.entries(items[id].direct_ingredients))demand[child]=(demand[child]||0)+crafts*q*factor;
   }else if(short>1e-6)missing[id]=short;
  }
+ // Show only recipe branches actually crafted in this plan or proposed draft.
+ const crafted=id=>(balances[id]?.crafted||0)/(items[id]?.output_quantity||1)+(draftCrafts[id]||0);
+ const active=new Set(),inactiveRecipes=new Set();
+ function activate(id){if(active.has(id)||!items[id])return;active.add(id);if(!free(id)&&crafted(id)>1e-8)Object.keys(items[id].direct_ingredients).forEach(activate);}
+ roots.forEach(activate);
+ // Keep the recipe visible when a selected leftover craft currently makes zero.
+ function showInactive(id){if(free(id)||!items[id]?.craftable||inactiveRecipes.has(id)||crafted(id)>1e-8)return;inactiveRecipes.add(id);for(const child of Object.keys(items[id].direct_ingredients)){active.add(child);showInactive(child);}}
+ for(const goal of settings.secondary||[])if(crafted(goal.item_id)<1e-8)showInactive(goal.item_id);
+ const primaryCrafts=plan.crafts_in_dependency_order?Object.fromEntries(plan.crafts_in_dependency_order.map(c=>[c.item_id,c.crafts])):null;
+ const protectedIds=new Set();
+ function protect(id){if(protectedIds.has(id)||!items[id])return;protectedIds.add(id);const count=primaryCrafts?primaryCrafts[id]||0:(balances[id]?.crafted||0);if(!free(id)&&count>1e-8)Object.keys(items[id].direct_ingredients).forEach(protect);}
+ Object.keys(settings.targets||{}).forEach(protect);
+ seen.clear();active.forEach(id=>seen.add(id));
  const ingredientIds=new Set(Object.values(items).flatMap(i=>Object.keys(i.direct_ingredients)));
  const spare=plan.item_balances.filter(b=>ingredientIds.has(b.item_id)&&b.expected_unused>=1&&!seen.has(b.item_id)&&!free(b.item_id)).sort((a,b)=>b.expected_unused-a.expected_unused);
- for(const b of spare.slice(0,6))seen.add(b.item_id);
+ const limit=settings.map_unused_mode==='all'?spare.length:settings.map_unused_mode==='none'?0:(settings.map_unused_count??6);
+ for(const b of spare.slice(0,limit))seen.add(b.item_id);
+ const spareIds=new Set(spare.map(b=>b.item_id));
+ for(const area of plan.areas)if((settings.map_expanded_areas||[]).includes(area.location_id))
+  for(const output of area.items)if(output.expected_drops>0&&spareIds.has(output.item_id))seen.add(output.item_id);
  expanded.forEach(id=>{if(items[id])seen.add(id);});
- for(const id of seen){const b=balances[id]||{};nodes.set(id,{id,kind:'item',name:items[id].name,primary:Object.hasOwn(settings.targets||{},id),secondary:(settings.secondary||[]).some(g=>g.item_id===id),draft:drafts.some(g=>g.item_id===id),missing:missing[id]||0,need:demand[id]||0,crafts:(b.crafted||0)/items[id].output_quantity+(draftCrafts[id]||0),draftCrafts:draftCrafts[id]||0,stock:Math.max(0,(b.expected_unused||0)+(draftCrafts[id]||0)*items[id].output_quantity-(demand[id]||0)),currentStock:Math.max(0,b.expected_unused||0),protected:protectedIds.has(id),voided:(settings.map_voided||[]).includes(id),useVoid:(settings.map_use_void||[]).includes(id),free:free(id),depth:1});}
+ for(const id of seen){const b=balances[id]||{};nodes.set(id,{id,kind:'item',name:items[id].name,primary:Object.hasOwn(settings.targets||{},id),secondary:(settings.secondary||[]).some(g=>g.item_id===id),draft:drafts.some(g=>g.item_id===id),missing:missing[id]||0,need:demand[id]||0,crafts:(b.crafted||0)/items[id].output_quantity+(draftCrafts[id]||0),draftCrafts:draftCrafts[id]||0,stock:Math.max(0,(b.expected_unused||0)+(draftCrafts[id]||0)*items[id].output_quantity-(demand[id]||0)),currentStock:Math.max(0,b.expected_unused||0),explorationSupplied:plan.areas.some(a=>a.items.some(o=>o.item_id===id&&o.expected_drops>0)),protected:protectedIds.has(id),voided:(settings.map_voided||[]).includes(id),useVoid:(settings.map_use_void||[]).includes(id),free:free(id),depth:1});}
  const blockedMemo=new Map();
- function blocked(id){if(blockedMemo.has(id))return blockedMemo.get(id);const value=!free(id)&&Boolean(missing[id]||Object.keys(items[id].direct_ingredients).some(blocked));blockedMemo.set(id,value);return value;}
- for(const node of nodes.values()){node.blocked=blocked(node.id);node.warningBlocked=visibleCraftMapGaps(Object.entries(missing)).some(([ref])=>craftMapDependents(items,[{item_id:node.id}],ref).length);}
+ function blocked(id,threshold=1e-8){const key=id+':'+threshold;if(blockedMemo.has(key))return blockedMemo.get(key);const value=!free(id)&&Boolean((missing[id]||0)>=threshold||crafted(id)>1e-8&&Object.keys(items[id].direct_ingredients).some(child=>blocked(child,threshold)));blockedMemo.set(key,value);return value;}
+ for(const node of nodes.values()){node.blocked=blocked(node.id);node.warningBlocked=blocked(node.id,10);}
  function link(from,to,q,phantom=false){const key=from+'>'+to;links.set(key,{from,to,quantity:q,phantom});}
- for(const id of order){const node=nodes.get(id);if(!node||free(id))continue;for(const [child,q] of Object.entries(items[id].direct_ingredients)){if(node.crafts>0){link(child,id,node.crafts*q*factor,Boolean(node.draftCrafts));node.depth=Math.max(node.depth,(nodes.get(child)?.depth||1)+1);}}}
+ for(const id of order){const node=nodes.get(id);if(!node||free(id))continue;for(const [child,q] of Object.entries(items[id].direct_ingredients)){if(node.crafts>0||inactiveRecipes.has(id)){link(child,id,node.crafts*q*factor,Boolean(node.draftCrafts)||inactiveRecipes.has(id));node.depth=Math.max(node.depth,(nodes.get(child)?.depth||1)+1);}}}
  const sources=[];
  for(const area of plan.areas){const id='area:'+area.location_id;nodes.set(id,{id,location:area.location_id,kind:'area',name:area.name,explores:area.explores,depth:0,outputs:area.items.filter(i=>i.expected_drops>0)});sources.push(id);for(const output of area.items)if(nodes.has(output.item_id)&&output.expected_drops>0)link(id,output.item_id,output.expected_drops);}
  const supplied=[...nodes.values()].filter(n=>n.kind==='item'&&(balances[n.id]?.starting_inventory>0||n.free));
@@ -64,12 +78,13 @@ function laneLayoutCraftMap(nodes,links,items,areaOrder=[]){
   const rank=n=>areaOrder.includes(n.location)?areaOrder.indexOf(n.location):999;
   return rank(a)-rank(b)||a.name.localeCompare(b.name);
  });
- const lanes=[{id:'shared',name:'Multiple Explore Sources'},...areas.map(n=>({id:n.id,name:n.name})),{id:'farming',name:'Farming'},{id:'other',name:'Other Sources'}];
+ const lanes=[{id:'disconnected',name:'No connected supply'},{id:'shared',name:'Multiple Explore Sources'},...areas.map(n=>({id:n.id,name:n.name})),{id:'farming',name:'Farming'},{id:'other',name:'Other Sources'}];
  const laneIndex=new Map(lanes.map((l,i)=>[l.id,i])),assigned=new Map();
  for(const n of nodes){
   const sourceIds=[...new Set((incoming.get(n.id)||[]).filter(id=>byId.get(id)?.kind==='area'))];
   if(n.kind==='area')assigned.set(n.id,laneIndex.get(n.id));
-  else if(sourceIds.length)assigned.set(n.id,sourceIds.length>1?0:laneIndex.get(sourceIds[0]));
+  else if(sourceIds.length)assigned.set(n.id,sourceIds.length>1?laneIndex.get('shared'):laneIndex.get(sourceIds[0]));
+  else if(n.kind==='item'&&n.depth<=1&&!n.free&&(n.missing>=10||!(incoming.get(n.id)||[]).length&&!items[n.id]?.farm_produced&&items[n.id]?.type!=='crop'))assigned.set(n.id,laneIndex.get('disconnected'));
   else if(n.kind==='inventory')assigned.set(n.id,laneIndex.get('other'));
   else if(!n.crafts||n.free)assigned.set(n.id,laneIndex.get(items[n.id]?.farm_produced||items[n.id]?.type==='crop'?'farming':'other'));
  }
@@ -142,7 +157,7 @@ if(typeof module!=='undefined')Object.assign(module.exports,{craftMapAddOptions,
 
 function craftMapNodeLabels(n,nodes,links){
  const required=Boolean(n.protected||n.primary||(n.kind!=='item'&&links.some(l=>l.from===n.id&&nodes.some(child=>child.id===l.to&&child.protected))));
- return {requirement:required?'REQUIRED NODE':'OPTIONAL NODE',mode:n.voided?'Void/Sell':n.useVoid?'Use + Void':''};
+ return {requirement:n.explorationSupplied?'EXPLORE OUTPUT NODE':required?'REQUIRED NODE':'OPTIONAL NODE',mode:n.voided?'Void/Sell':n.useVoid?'Use + Void':''};
 }
 if(typeof module!=='undefined')module.exports.craftMapNodeLabels=craftMapNodeLabels;
 

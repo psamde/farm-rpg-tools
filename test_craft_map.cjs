@@ -30,7 +30,9 @@ assert.equal(lanes.assignments.shared,'shared');
 assert.equal(lanes.assignments.exclusive,'b');
 assert.equal(lanes.assignments.crafted,'flow');
 assert.equal(lanes.assignments.crop,'farming');
-assert.equal(lanes.assignments.external,'other');
+assert.equal(lanes.assignments.external,'disconnected');
+assert.equal(lanes.lanes[0].id,'disconnected');
+assert.ok(lanes.positions.external.y<lanes.positions.exclusive.y);
 assert.equal(lanes.positions.b.y,lanes.positions.exclusive.y);
 for(const lane of lanes.lanes){const members=ns.filter(n=>lanes.assignments[n.id]===lane.id);for(const n of members)assert.ok(lanes.positions[n.id].y>=lane.y&&lanes.positions[n.id].y+110<lane.y+lane.height);}
 console.log('Source lanes, shared drops, farm supplies, recipe alignment and lane bounds passed.');
@@ -66,7 +68,7 @@ assert.equal(ringGraph.nodes.find(n=>n.id===id('Iron Ring')).blocked,false);
 assert.equal(ringGraph.nodes.find(n=>n.id===id('Stone')).stock,0);
 const noPerk=buildCraftMap(items,emeraldSupply,{iron_depot:false,targets:{},secondary:[]},[{item_id:id('Emerald Ring'),cap:10}]);
 assert.equal(noPerk.missing[id('Iron')],20);
-const protectedGraph=buildCraftMap(items,emeraldSupply,{iron_depot:true,targets:{[id('Emerald Ring')]:10},secondary:[]});
+const protectedGraph=buildCraftMap(items,{...emeraldSupply,crafts_in_dependency_order:[{item_id:id('Emerald Ring'),crafts:10},{item_id:id('Iron Ring'),crafts:10}],item_balances:[...emeraldSupply.item_balances,{item_id:id('Emerald Ring'),crafted:10},{item_id:id('Iron Ring'),crafted:10}]},{iron_depot:true,targets:{[id('Emerald Ring')]:10},secondary:[]});
 assert.ok(protectedGraph.nodes.find(n=>n.id===id('Iron Ring')).protected);
 assert.equal(craftMapDependents(items,[{item_id:id('Emerald Ring')}],id('Iron Ring')).length,1);
 assert.equal(craftMapUsage({kind:'item',stock:100,voided:true}),'void');
@@ -80,3 +82,62 @@ console.log('Requirement labels and explicit choice labels passed.');
 const {visibleCraftMapGaps}=require('./web/craft-map-model.js');
 assert.deepEqual(visibleCraftMapGaps([['a',1],['b',9.99],['c',10]]),[['c',10]]);
 assert.equal(craftMapUsage({kind:'item',stock:0,missing:3}),'fulfilled');
+
+// Directly acquired intermediates must not pull unused recipes into the map.
+const bottlePlan={areas:[],crafts_in_dependency_order:[{item_id:id('Glass Bottle'),crafts:10}],item_balances:[
+ {item_id:id('Glass Bottle'),crafted:10,expected_unused:0},
+ {item_id:id('Glass Orb'),crafted:0,expected_unused:5,expected_exploration_drops:15},
+ {item_id:id('Stone'),crafted:0,expected_unused:0}
+]};
+const bottleSettings={targets:{[id('Glass Bottle')]:10},secondary:[]};
+const directGraph=buildCraftMap(items,bottlePlan,bottleSettings);
+assert.ok(directGraph.nodes.find(n=>n.id===id('Glass Orb')).protected);
+assert.ok(!directGraph.nodes.some(n=>n.id===id('Shimmer Stone')));
+assert.ok(!directGraph.nodes.some(n=>n.id===id('Unpolished Shimmer Stone')));
+assert.ok(directGraph.links.every(l=>directGraph.nodes.some(n=>n.id===l.from)&&directGraph.nodes.some(n=>n.id===l.to)));
+// A later draft can introduce this branch, but it is optional, not primary-protected.
+const withDraft=buildCraftMap(items,bottlePlan,bottleSettings,[{item_id:id('Glass Orb'),cap:10}]);
+assert.ok(withDraft.nodes.some(n=>n.id===id('Shimmer Stone')));
+assert.equal(withDraft.nodes.find(n=>n.id===id('Shimmer Stone')).protected,false);
+assert.ok(withDraft.nodes.some(n=>n.id===id('Unpolished Shimmer Stone')));
+assert.ok(Object.keys(withDraft.missing).length>0);
+// A separately supplied leftover may still appear, correctly marked optional.
+const surplusGraph=buildCraftMap(items,{...bottlePlan,item_balances:[...bottlePlan.item_balances,{item_id:id('Shimmer Stone'),crafted:0,expected_unused:20}]},bottleSettings);
+assert.equal(surplusGraph.nodes.find(n=>n.id===id('Shimmer Stone')).protected,false);
+console.log('Collected intermediates prune inactive recipes; draft branches and optional leftovers remain available.');
+
+// Solved previews keep requested roots even if the solver makes none.
+const canteen=id('Horn Canteen');
+for(const made of [0,9999]){
+ const solved={item_balances:[{item_id:canteen,crafted:made,expected_unused:made}],areas:[]};
+ const preview=buildCraftMap(items,solved,{targets:{},secondary:[{item_id:canteen,cap:10000}]},[]);
+ assert.equal(preview.nodes.find(n=>n.id===canteen).crafts,made);
+ assert.equal(preview.nodes.find(n=>n.id===canteen).secondary,true);
+ assert.equal(preview.nodes.find(n=>n.id===canteen).draftCrafts,0);
+}
+console.log('Solved preview retains zero-output requested crafts without double-counting drafts.');
+
+// Global top-N and per-location expansion share nodes and preserve recipe inputs.
+const visibleItems={};for(let i=1;i<=9;i++)visibleItems[i]={id:String(i),name:'Material '+i,craftable:false,direct_ingredients:{},output_quantity:1};
+visibleItems.recipe={id:'recipe',name:'Recipe',craftable:true,direct_ingredients:Object.fromEntries(Object.keys(visibleItems).map(id=>[id,1])),output_quantity:1};
+const visibilityPlan={item_balances:Object.keys(visibleItems).filter(id=>id!=='recipe').map(id=>({item_id:id,expected_unused:100-Number(id),crafted:0})),areas:[{location_id:'desert',name:'Desert',explores:100,items:[1,2,3,4,5,6].map(id=>({item_id:String(id),expected_drops:100}))},{location_id:'forest',name:'Forest',explores:10,items:[1,7,8,9].map(id=>({item_id:String(id),expected_drops:10}))}]};
+const view=opts=>buildCraftMap(visibleItems,visibilityPlan,{targets:{},secondary:[],...opts}).nodes.filter(n=>n.kind==='item').map(n=>n.id);
+assert.equal(view({}).length,6);
+assert.equal(view({map_unused_mode:'none'}).length,0);
+assert.equal(view({map_unused_mode:'all'}).length,9);
+assert.deepEqual(view({map_unused_mode:'none',map_expanded_areas:['forest']}),['1','7','8','9']);
+assert.equal(view({map_unused_count:2,map_expanded_areas:['forest']}).length,5);
+assert.equal(view({map_unused_count:2,map_expanded_areas:[]}).length,2);
+assert.equal(view({map_unused_mode:'none',targets:{recipe:1}}).includes('recipe'),true);
+console.log('Top unused All / X / None and location expansion preserve shared unique nodes and required roots.');
+const suppliedGraph=buildCraftMap(visibleItems,visibilityPlan,{targets:{},secondary:[],map_unused_mode:'all'});
+assert(suppliedGraph.nodes.filter(n=>n.kind==='item').every(n=>n.explorationSupplied));
+assert.equal(buildCraftMap(items,plan,{targets:{},secondary:[]},drafts).nodes.find(n=>n.id===id('Purple Diary')).explorationSupplied,false);
+console.log('Exploration drop nodes are protected from deletion independently of primary goals.');
+
+assert.equal(require('./web/craft-map-model.js').craftMapNodeLabels({kind:'item',explorationSupplied:true},[],[]).requirement,'EXPLORE OUTPUT NODE');
+
+const missingFarm=laneLayoutCraftMap([...ns,{id:'straw',name:'Straw',kind:'item',depth:1,missing:95126,crafts:0}],ls,{crop:{farm_produced:true},straw:{farm_produced:true}},['a','b']);
+assert.equal(missingFarm.assignments.straw,'disconnected');
+assert.ok(missingFarm.positions.straw.y<missingFarm.positions.crop.y);
+assert.ok(missingFarm.positions.straw.y<missingFarm.positions.exclusive.y);

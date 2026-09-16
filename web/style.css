@@ -395,3 +395,25 @@ dialog,#suggestionsDialog{position:fixed;inset:0;margin:auto;max-height:calc(100
 .explore-increase{display:inline-block;font-size:.85em;padding:3px 7px;border:1px solid var(--line);border-radius:5px;margin-left:5px;font-weight:600}.guide-select:has(input:disabled){opacity:.6;cursor:not-allowed}
 
 .mmbadge,.itemname .mmbadge,.map-node-label>.mmbadge{align-items:center;justify-content:center;text-align:center}.mmbadge .tower-level{display:block;width:100%;text-align:center;margin:0;padding:0}
+
+/* Map-led planner: one full-width workflow, no legacy planning panels. */
+[data-legacy-planner]{display:none!important}.workspace{display:block}.workspace>.setup{width:100%;max-width:none;box-sizing:border-box;margin-top:20px}.route-total{font-size:22px;font-weight:700;margin:12px 0}.routepanel>.summarycosts{margin:0 0 16px}.map-applied-explore{display:flex;align-items:center;gap:8px;margin:12px 0}.map-applied-explore input{width:auto}
+
+/* Full-width settings rows with compact individual controls. */
+.workspace>.setup{display:block;padding:24px}.settings-header{margin-bottom:20px}.settings-header h2{font-size:20px;margin:0}.settings-header .hint{margin:6px 0 0}
+.settings-cards{display:flex;flex-direction:column;gap:20px}
+.setup .settings-cards>.settingsgroup{display:flex;flex-wrap:wrap;align-items:stretch;gap:10px 16px;border:0;border-bottom:1px solid var(--line);margin:0;padding:0 0 20px}
+.setup .settings-cards h2{font-size:15px;flex-basis:100%;margin:0 0 2px}
+.setup .settings-cards .settingrow{flex:1 1 230px;max-width:400px;min-height:72px;margin:0!important;padding:12px!important;border:1px solid var(--line)!important;border-radius:8px;gap:16px;background:color-mix(in srgb,var(--line) 10%,transparent)}
+.setup .settings-cards .settingnote{flex:1 1 240px;align-self:center;max-width:440px;line-height:1.6;margin:0;font-size:12px}
+.settings-locations{min-width:0}.settings-locations>.hint{margin:8px 0 14px}.settings-locations .smallactions{margin:0;display:flex;align-items:center;gap:8px;font-size:12px}
+.setup #ciderSettings{display:grid;grid-template-columns:repeat(auto-fit,minmax(245px,1fr));gap:10px;padding:0;max-height:none;overflow:visible}
+.setup .effectivenessrow{display:grid;grid-template-columns:1fr auto;gap:10px;padding:12px!important;border:1px solid var(--line);border-radius:8px;background:color-mix(in srgb,var(--line) 10%,transparent)}
+.setup .effectivenessrow.disabled-area{background:transparent;opacity:.65}
+.setup .effectivenessrow>.location-choice{grid-column:1/-1;display:flex;align-items:center;gap:8px;font-size:13px;margin:0;cursor:pointer}.location-choice input{width:16px;height:16px;margin:0;flex:none}
+.location-upgrades-label{font-size:11px;color:var(--muted);grid-column:1}.setup .effectivenessrow .effectivenesscontrols{grid-column:1/-1;display:flex;justify-content:space-between;gap:12px}.setup .effectivenessrow output{font-size:14px}.setup .effectivenessrow output small{font-size:10px;margin-top:3px}.setup .effectivenessrow .stepper{width:96px}.setup .effectivenessrow .stepper button{width:30px}.setup .effectivenessrow .stepper input{width:34px}
+.setup #startingInventoryHome:empty{display:none}.setup #startingInventoryHome:not(:empty){margin-top:20px}.setup #inventorySection{margin:0;padding:16px;border:1px solid var(--line);border-radius:8px}.setup #inventoryRows{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:8px 24px;max-height:none}.setup #inventoryForm{max-width:520px;margin-top:16px}
+.settings-footer{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:20px;padding-top:16px;border-top:1px solid var(--line)}.setup .settings-footer .hint{margin:0}.setup .settings-footer .compute{width:auto;margin:0;padding:10px 18px}
+@media(max-width:650px){.workspace>.setup{padding:16px}.setup .settings-cards .settingrow{max-width:none;flex-basis:100%}.settings-locations>.sectiontitle{flex-wrap:wrap}.setup #ciderSettings{grid-template-columns:1fr}.settings-footer{flex-direction:column;align-items:stretch}.setup .settings-footer .compute{width:100%}}
+
+.targetrow .name{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px}.target-supplies{display:inline-block;font-size:11px;font-weight:400;color:var(--muted);background:color-mix(in srgb,var(--line) 20%,transparent);border:1px solid var(--line);border-radius:5px;padding:4px 7px;cursor:help;line-height:1.4}

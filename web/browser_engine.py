@@ -73,16 +73,17 @@ def guided_compute(catalog, payload, progress=lambda message: None):
     current = allocate(goals)
     before = {b['item_id']:b for b in current['item_balances']}
     old_outputs = {g['item_id']:g['crafts'] for g in current.get('secondary',{}).get('targets',[])}
-    if payload.get('chosen_goals'):
-        chosen = payload['chosen_goals']
+    if payload.get('chosen_goals') or 'replacement_goals' in payload:
+        replacement = 'replacement_goals' in payload
+        chosen = payload['replacement_goals'] if replacement else payload['chosen_goals']
         refs = [g['item_id'] for g in chosen]
-        if len(set(refs)) != len(refs) or set(refs) & (set(old_outputs) | set(payload.get('targets',{}))):
+        if len(set(refs)) != len(refs) or set(refs) & ((set() if replacement else set(old_outputs)) | set(payload.get('targets',{}))):
             raise ValueError('Choose each new leftover craft only once.')
         progress('Checking your selected crafts together…')
-        plan = allocate([*goals, *chosen])
+        plan = allocate(chosen if replacement else [*goals, *chosen])
         outputs = {g['item_id']:g['crafts'] for g in plan.get('secondary',{}).get('targets',[])}
         balances={b['item_id']:b for b in plan['item_balances']}
-        return dict(goals=chosen, outputs=[dict(item_id=r,crafts=outputs.get(r,0),remaining=balances.get(r,{}).get('expected_final_inventory',0)) for r in refs],
+        return dict(preview_plan=plan, replacement=replacement, goals=chosen, outputs=[dict(item_id=r,crafts=outputs.get(r,0),remaining=balances.get(r,{}).get('expected_final_inventory',0)) for r in refs],
             total_explores=plan['optimal_total_explores'],
             extra_explores=plan['optimal_total_explores']-current['optimal_total_explores'],
             new_locations=sorted({a['location_id'] for a in plan['areas']}-{a['location_id'] for a in current['areas']}),

@@ -19,3 +19,21 @@
 .map-node-handle{display:flex;align-items:flex-start;flex-direction:column;gap:5px;padding-top:9px}.map-required-label{font-size:8px;letter-spacing:.055em;border:1px solid #84978b70;border-radius:4px;padding:3px 5px;color:var(--muted);line-height:1}.map-required-label.required{border-color:#70a586;color:#43815a;background:#70a58616}.map-choice-label{display:table;margin-top:8px;padding:3px 7px;border-radius:4px;border:1px solid #86a8c1;font-size:10px;line-height:1.2;color:#486f87;background:#86a8c11a}[data-theme=dark] .map-required-label.required{color:#a5d4b1}[data-theme=dark] .map-choice-label{color:#b0cfe1}.map-node .map-port{top:66px}
 
 [data-theme=dark] .map-node.usage-void{background:#29332e;color:#c6d0c9;border-color:#75837a;opacity:.9}.map-node.usage-void .map-choice-label{opacity:1}.map-node.usage-void .map-required-label{color:inherit}
+
+/* Compact, parallel choices for leftover crafts. */
+.map-add-actions{gap:8px}.map-add-option{padding:8px}.map-add-option .hint,.map-add-option .map-supplied{margin:6px 0 0}.map-add-option .map-gap{margin-top:6px}.map-custom-label{display:block;font-size:12px;font-weight:600}.map-custom-controls{display:flex;gap:6px;margin-top:6px}.map-custom-controls input{width:0;min-width:0;flex:1}.map-custom-controls button{flex:none}.map-quantity-presets{display:flex;align-items:center;gap:5px;margin-top:6px}.map-quantity-presets button{padding:3px 8px;font-size:11px}.map-quantity-presets span,.map-custom-gaps small{font-size:11px;color:var(--muted)}
+
+.map-display-settings{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:12px 0}.map-display-settings label{display:flex;align-items:center;gap:8px;font-size:12px}.map-display-settings>input{width:72px}.map-display-settings .hint{margin:0;flex:1;min-width:180px}.map-area-toggle{font-size:11px;padding:4px 7px;margin-top:5px;width:100%}
+
+#mapReviewDialog{width:min(760px,calc(100vw - 32px));max-height:85dvh;margin:auto;padding:22px;border:1px solid var(--line);border-radius:14px;overflow:auto}#mapReviewDialog::backdrop{background:#06130dbb}#mapReviewDialog .map-preview{margin-top:12px;padding-top:12px}#mapReviewDialog .map-preview-outputs{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}#mapReviewStatus{font-size:13px;color:var(--muted)}
+
+.map-inspector .map-applied-explore{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px;border:1px solid var(--line);border-radius:8px;margin:12px 0}.map-applied-explore>span{flex:1;min-width:0}.map-applied-explore strong{display:block;font-size:12px}.map-applied-explore small{display:block;font-size:11px;color:var(--muted);margin-top:5px}.map-inspector .map-applied-explore input{width:38px!important;min-width:38px;flex:0 0 38px;margin:0}
+
+/* Reserve toolbar/footer space; only the canvas and inspector scroll. */
+.craft-map.map-fullscreen{display:flex;flex-direction:column;overflow:hidden;height:calc(100dvh - 20px)}
+.map-fullscreen>.map-header,.map-fullscreen>.map-intro,.map-fullscreen>.map-display-settings,.map-fullscreen>.map-legend,.map-fullscreen>.map-footer{flex-shrink:0}
+.map-fullscreen>.map-workspace{flex:1;min-height:0}
+.map-fullscreen .map-viewport,.map-fullscreen .map-inspector{height:100%;max-height:100%;min-height:0}
+.map-fullscreen>.map-footer{position:relative;background:inherit;margin:0;padding-top:12px}
+
+.map-intro{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;color:var(--muted)}.map-help{position:relative;margin:0;padding:0;border:0}.map-help summary{font-size:12px;cursor:pointer}.map-help[open]{flex-basis:100%}.map-help p{max-width:850px;font-size:12px;margin:6px 0}.map-inspector>label{display:block;margin:12px 0 6px}.map-inspector>label input{margin-top:6px}.map-inspector>button{margin-top:4px}

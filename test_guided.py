@@ -51,12 +51,26 @@ class GuidedTests(unittest.TestCase):
         payload=dict(targets={'3':100},areas=['joint'],secondary=[],chosen_goals=[goal],automatic_areas=['joint'])
         preview=guided_compute(c,payload)
         self.assertEqual(preview['new_locations'],[])
+        self.assertEqual(preview['preview_plan']['optimal_total_explores'], preview['total_explores'])
+        self.assertTrue(all(b['expected_unused'] >= -1e-5 for b in preview['preview_plan']['item_balances']))
         self.assertGreater(preview['extra_explores'],0)
         self.assertGreater(preview['outputs'][0]['crafts'],10)
         self.assertLessEqual(preview['outputs'][0]['crafts'],100)
         applied=compute(c,dict(payload,secondary=[goal]))['plans'][0]
         self.assertAlmostEqual(preview['total_explores'],applied['optimal_total_explores'])
         self.assertEqual([a['location_id'] for a in applied['areas']],['joint'])
+
+    def test_remove_last_craft_is_reviewable(self):
+        c,_=AutomaticTests().fixture()
+        goal=dict(item_id='5',cap=100,allow_exploration=True,automatic_batch=True)
+        payload=dict(targets={'3':100},areas=['joint','b'],secondary=[goal],replacement_goals=[],chosen_goals=[])
+        preview=guided_compute(c,payload)
+        self.assertTrue(preview['replacement'])
+        self.assertEqual(preview['goals'],[])
+        self.assertEqual(preview['outputs'],[])
+        self.assertLess(preview['extra_explores'],0)
+        applied=compute(c,dict(payload,secondary=[]))['plans'][0]
+        self.assertEqual(preview['total_explores'],applied['optimal_total_explores'])
 
     def test_quest_order_and_stable_item_ids(self):
         q=lambda id:dict(id=id,cleanTitle='Step '+str(id),requiredItems=[dict(quantity=3,item=dict(id=40,name='Stone'))])

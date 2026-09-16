@@ -16,7 +16,7 @@ function settingIcons(){document.querySelectorAll('[data-setting-icon]').forEach
 
 let catalog, items={}, state, result=null, selected=0, consumers=[], revision=0, timer, lastSuccess=null;
 
-const defaults={map_use_void:[],map_hidden:[],map_voided:[],tower_level:0,map_positions:{},guided_skipped:[],quest_selection:[],selected_plan:0,selected_plan_key:"",planner_mode:'goals',production_interval:60,passive_inventory:'{}',craftworks_slots:10,inventory_size:10000,route_method:'AP',route_foods:{},secondary:[],automatic_areas:null,theme:'dark',resource_saver:0,wanderer:0,lemon_squeezer:false,cinnamon:false,cider_rolls:{},effectiveness_upgrades:{},sprint_shoes:0,targets:{'167':1000},iron_depot:true,runecube:false,mode:'best',max_areas:15,areas:null,inventory:'{}'};
+const defaults={map_unused_mode:"top",map_unused_count:6,map_expanded_areas:[],map_use_void:[],map_hidden:[],map_voided:[],tower_level:0,map_positions:{},guided_skipped:[],quest_selection:[],selected_plan:0,selected_plan_key:"",planner_mode:'goals',production_interval:60,passive_inventory:'{}',craftworks_slots:10,inventory_size:10000,route_method:'AP',route_foods:{},secondary:[],automatic_areas:null,theme:'dark',resource_saver:0,wanderer:0,lemon_squeezer:false,cinnamon:false,cider_rolls:{},effectiveness_upgrades:{},sprint_shoes:0,targets:{'167':1000},iron_depot:true,runecube:false,mode:'best',max_areas:15,areas:null,inventory:'{}'};
 
 async function api(url,body){return browserPlanner.api(url,body);}
 
@@ -33,13 +33,13 @@ function refreshCosts(){ciderSettings();if(result){detail();costPreview();}}
 
 function ciderSettings(){
 
- $('ciderSettings').innerHTML=catalog.locations.map(a=>{const x=ciderEffectiveness(state,a.id);const rate=x.rolls*.4/a.base_drop_rate;return `<div class="effectivenessrow"><label for="effect-${a.id}"><span class="areaicon" aria-hidden="true">⌖</span>${esc(a.name)}</label><div class="effectivenesscontrols"><div class="stepper"><button type="button" data-step="-1" data-location="${a.id}" aria-label="Decrease ${esc(a.name)} upgrades" ${x.upgrades===0?'disabled':''}>−</button><input id="effect-${a.id}" data-effect="${a.id}" type="number" min="0" max="10000" step="1" value="${x.upgrades}" aria-label="${esc(a.name)} effectiveness upgrades"><button type="button" data-step="1" data-location="${a.id}" aria-label="Increase ${esc(a.name)} upgrades" ${x.upgrades>=10000?'disabled':''}>+</button></div><output for="effect-${a.id}" title="Estimated normal-explore equivalent per Cider in this area">${fmt(rate)}${x.custom?'<small>Saved custom rate*</small>':''}</output></div>${x.custom?'<small class="hint">*Previous rate preserved. Set upgrades to replace it.</small>':''}</div>`;}).join('');
+ $('ciderSettings').innerHTML=catalog.locations.map(a=>{const x=ciderEffectiveness(state,a.id);const rate=x.rolls*.4/a.base_drop_rate;return `<div class="effectivenessrow ${state.areas.includes(a.id)?'enabled':'disabled-area'}"><label class="location-choice"><input type="checkbox" data-location-enabled="${a.id}" ${state.areas.includes(a.id)?'checked':''}>${a.image?`<img class="gameicon" src="${esc(a.image.startsWith('/')?'https://farmrpg.com'+a.image:a.image)}" alt="">`:''}<span>${esc(a.name)}</span></label><span class="location-upgrades-label">Upgrades</span><div class="effectivenesscontrols"><div class="stepper"><button type="button" data-step="-1" data-location="${a.id}" aria-label="Decrease ${esc(a.name)} upgrades" ${x.upgrades===0?'disabled':''}>−</button><input id="effect-${a.id}" data-effect="${a.id}" type="number" min="0" max="10000" step="1" value="${x.upgrades}" aria-label="${esc(a.name)} effectiveness upgrades"><button type="button" data-step="1" data-location="${a.id}" aria-label="Increase ${esc(a.name)} upgrades" ${x.upgrades>=10000?'disabled':''}>+</button></div><output for="effect-${a.id}" title="Estimated normal-explore equivalent per Cider in this area">${fmt(rate)}<small>explores / Cider</small>${x.custom?'<small>Saved custom rate*</small>':''}</output></div>${x.custom?'<small class="hint">*Previous rate preserved. Set upgrades to replace it.</small>':''}</div>`;}).join('');
 
 }
 
 function setEffectiveness(id,n){if(!Number.isInteger(n)||n<0||n>10000)return;state.effectiveness_upgrades[id]=n;delete state.cider_rolls[id];save();refreshCosts();}
 
-$('ciderSettings').onchange=e=>{const id=e.target.dataset.effect;if(!id||!e.target.reportValidity())return;setEffectiveness(id,Number(e.target.value));};
+$('ciderSettings').onchange=e=>{const area=e.target.dataset.locationEnabled;if(area){state.areas=e.target.checked?[...new Set([...state.areas,area])]:state.areas.filter(id=>id!==area);areas();changed();return;}const id=e.target.dataset.effect;if(!id||!e.target.reportValidity())return;setEffectiveness(id,Number(e.target.value));};
 
 $('ciderSettings').onclick=e=>{const b=e.target.closest('[data-step]');if(!b)return;const id=b.dataset.location,step=Number(b.dataset.step);setEffectiveness(id,Number(state.effectiveness_upgrades[id]||0)+step);$('ciderSettings').querySelector(`[data-location="${id}"][data-step="${step}"]`)?.focus();};
 
@@ -56,9 +56,9 @@ window.addEventListener('hashchange',route);route();
 function externalIngredientNote(id){
  const missing=Object.keys(items[id]?.raw_materials||{}).filter(ref=>!items[ref]?.explorable&&!(state.iron_depot&&['Iron','Nails'].includes(items[ref]?.name)));
  if(!missing.length)return '';
- return `<p class="externalnote">Supplies from outside exploration: ${missing.map(ref=>esc(items[ref]?.name||ref)).join(', ')}. Primary targets automatically include the required amounts in starting inventory. Leftover crafts use the supplies available in the plan.</p>`;
+ return `<span class="target-supplies" tabindex="0" title="Bring these from your farm or another source outside exploration. The required quantities are included in Starting ingredients consumed below.">Bring: ${missing.map(ref=>esc(items[ref]?.name||ref)).join(', ')}</span>`;
 }
-function targets(){ $('targetCount').textContent=Object.keys(state.targets).length; $('targets').innerHTML=Object.entries(state.targets).map(([id,q])=>`<div class="targetrow"><div class="name">${itemName(id,items[id].name)}</div><label class="targetquantity" for="target-${id}"><span>${items[id].craftable?'Craft quantity':'Collect quantity'}</span><input id="target-${id}" data-quantity="${id}" type="number" min="1" max="100000000" step="1" value="${q}"></label><button class="iconbutton" type="button" data-remove="${id}" aria-label="Remove ${esc(items[id].name)}">×</button>${externalIngredientNote(id)}</div>`).join('');}
+function targets(){ $('targetCount').textContent=Object.keys(state.targets).length; $('targets').innerHTML=Object.entries(state.targets).map(([id,q])=>`<div class="targetrow"><div class="name">${itemName(id,items[id].name)}${externalIngredientNote(id)}</div><label class="targetquantity" for="target-${id}"><span>${items[id].craftable?'Craft quantity':'Collect quantity'}</span><input id="target-${id}" data-quantity="${id}" type="number" min="1" max="100000000" step="1" value="${q}"></label><button class="iconbutton" type="button" data-remove="${id}" aria-label="Remove ${esc(items[id].name)}">×</button></div>`).join('');}
 
 function changed(){startingSupplyReport(null);state.secondary=state.secondary.filter(r=>!state.targets[r.item_id]);save();revision++;if(state.planner_mode!=='passive'&&!Object.keys(state.targets).length){clearTimeout(timer);resetEmptyPlan();return;}secondaryRows();$('resultContent').classList.add('stale');$('status').textContent='Targets or settings changed. Recalculating…';clearTimeout(timer);timer=setTimeout(calculate,350);}
 
@@ -105,7 +105,7 @@ $('inventoryRows').onclick=e=>{const b=e.target.closest('[data-remove-stock]');i
 
 $('inventoryForm').onsubmit=e=>{e.preventDefault();try{const name=$('inventoryItem').value.trim(),item=items[name]||Object.values(items).find(i=>i.name.toLowerCase()===name.toLowerCase());if(!item)throw Error('Choose an item from the list.');const quantity=Number($('inventoryQuantity').value),stock=inventoryData();if(!Number.isSafeInteger(quantity)||quantity<0||(stock[item.id]||0)+quantity>1e12)throw Error('Enter a whole quantity from 0 to 1,000,000,000,000.');stock[item.id]=(stock[item.id]||0)+quantity;setInventory(stock);inventoryRows();$('inventoryItem').value='';$('inventoryError').hidden=true;changed();$('stock-'+item.id).focus();}catch(e){$('inventoryError').hidden=false;$('inventoryError').textContent=e.message;}};
 
-function areas(){$('areaChoices').innerHTML=catalog.locations.map(a=>`<label class="check"><input type="checkbox" data-area="${a.id}" ${state.areas.includes(a.id)?'checked':''}> <span class="areaicon" aria-hidden="true">⌖</span>${esc(a.name)}</label>`).join('');$('areaCount').textContent=`(${state.areas.length})`;}
+function areas(){$('areaChoices').innerHTML=catalog.locations.map(a=>`<label class="check"><input type="checkbox" data-area="${a.id}" ${state.areas.includes(a.id)?'checked':''}> <span class="areaicon" aria-hidden="true">⌖</span>${esc(a.name)}</label>`).join('');$('areaCount').textContent=`${state.areas.length} enabled`;ciderSettings();}
 
 $('areaChoices').addEventListener('change',()=>{state.areas=[...$('areaChoices').querySelectorAll('input:checked')].map(i=>i.dataset.area);$('areaCount').textContent=`(${state.areas.length})`;changed();});
 
@@ -264,7 +264,7 @@ $('inventorySize').onchange=()=>{if(!$('inventorySize').reportValidity())return;
 
 $('routeMethod').onchange=()=>{state.route_method=$('routeMethod').value;save();renderRoute();};
 
-function renderRoute(){if(!result)return;$('routePanel').hidden=false;$('routePanel').classList.remove('stale');$('inventorySize').value=state.inventory_size||10000;$('routeMethod').value=state.route_method||'AP';$('routeOption').textContent=`Option ${selected+1}${state.planner_mode==='passive'?` · per ${state.production_interval===10?'10 minutes':'hour'} of production`:''}`;renderRouteFoods();
+function renderRoute(){if(!result)return;$('routePanel').hidden=false;$('routeTotal').textContent=fmt(result.plans[selected].optimal_total_explores)+' expected explores';$('routePanel').classList.remove('stale');$('inventorySize').value=state.inventory_size||10000;$('routeMethod').value=state.route_method||'AP';$('routeOption').textContent=`Option ${selected+1}${state.planner_mode==='passive'?` · per ${state.production_interval===10?'10 minutes':'hour'} of production`:''}`;renderRouteFoods();
 
  try{const r=inventoryRoute(result.plans[selected],items,catalog.locations,state),drink=r.method==='AP'?'APs':'Ciders';
 
@@ -335,6 +335,9 @@ function withSettingDefaults(input){
 }
 function validatePlanSettings(input){
  const fail=m=>{throw Error('Plan: '+m);},object=v=>v&&typeof v==='object'&&!Array.isArray(v),out=withSettingDefaults(input);
+ if(!['all','top','none'].includes(out.map_unused_mode))fail('Invalid unused materials display');
+ if(!Number.isInteger(out.map_unused_count)||out.map_unused_count<1||out.map_unused_count>1000)fail('Invalid unused materials count');
+ if(!Array.isArray(out.map_expanded_areas)||out.map_expanded_areas.some(id=>typeof id!=='string'))fail('Invalid expanded locations');
  if(!Array.isArray(out.map_hidden)||out.map_hidden.some(id=>typeof id!=='string'))fail('Invalid hidden materials');
  if(!Array.isArray(out.map_use_void)||out.map_use_void.some(id=>typeof id!=='string'))fail('Invalid use and void materials');
  if(!Array.isArray(out.map_voided)||out.map_voided.some(id=>typeof id!=='string'))fail('Invalid voided materials');
@@ -368,7 +371,7 @@ $('clearPlan').onclick=()=>{if(state)$('clearPlanDialog').showModal();};
 $('cancelClearPlan').onclick=()=>$('clearPlanDialog').close();
 $('confirmClearPlan').onclick=()=>{
  clearTimeout(timer);revision++;
- state.targets={};state.secondary=[];state.automatic_areas=null;state.guided_skipped=[];state.map_voided=[];state.map_use_void=[];state.map_hidden=[];state.quest_selection=[];state.inventory='{}';state.passive_inventory='{}';
+ state.targets={};state.secondary=[];state.automatic_areas=null;state.guided_skipped=[];state.map_voided=[];state.map_use_void=[];state.map_hidden=[];state.map_expanded_areas=[];state.quest_selection=[];state.inventory='{}';state.passive_inventory='{}';
  $('clearPlanDialog').close();error('');$('inventoryError').hidden=true;
  for(const id of ['itemInput','inventoryItem','planCode'])$(id).value='';
  $('planCodeStatus').textContent='';targets();inventoryRows();resetEmptyPlan();
