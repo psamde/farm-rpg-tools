@@ -13,7 +13,7 @@ function inventoryRoute(plan, items, locations, settings){
  if(!Number.isInteger(capacity)||capacity<1)throw Error('Inventory size must be a positive whole number.');
  const factor=1/(1+Number(plan.assumptions.resource_saver||0)/100),free=new Set(plan.assumptions.unlimited_free_items.map(r=>r.id));
  const stock={},remaining={},order=[],seen=new Set();
- for(const b of plan.item_balances)stock[b.item_id]=b.starting_inventory+(b.required_external_supply||0);
+ for(const b of plan.item_balances)stock[b.item_id]=b.starting_inventory+(b.auto_starting_inventory===undefined?(b.required_external_supply||0):0);
  for(const c of [...plan.crafts_in_dependency_order,...(plan.secondary?.crafts_in_dependency_order||[])])remaining[c.item_id]=(remaining[c.item_id]||0)+c.crafts;
  function visit(id){if(seen.has(id))return;seen.add(id);for(const child of Object.keys(items[id]?.direct_ingredients||{}))visit(child);if(remaining[id])order.push(id);}
  Object.keys(remaining).forEach(visit);
@@ -63,7 +63,7 @@ function inventoryRoute(plan, items, locations, settings){
   Object.assign(forecastStock,projection.available);for(const [id,n] of Object.entries(projection.work))forecastRemaining[id]-=n;start=end+1;
  }
  const interval=Math.max(1,...activeGroups.map(g=>g.end-g.start+1));
- const visits=[],empties=[];let current=0,uses=0,crafts=0,round=1,problem=initialOverflow?`${items[initialOverflow]?.name||initialOverflow} starts above your inventory size. Enter an amount you can hold at once.`:null;
+ const visits=[],empties=[];let current=0,uses=0,crafts=0,round=1,problem=initialOverflow?(plan.item_balances.find(b=>b.item_id===initialOverflow)?.auto_starting_inventory?`${items[initialOverflow]?.name||initialOverflow} supplies exceed your inventory size. Restock from your farm between visits; restocking is not yet included in loop verification.`:`${items[initialOverflow]?.name||initialOverflow} starts above your inventory size. Enter an amount you can hold at once.`):null;
  // Track every stock increase, including intermediate crafted outputs. A route
  // is complete only if its entire expected inventory flow stays within capacity.
  const inventoryPeaks={};

@@ -137,6 +137,14 @@ def plan(catalog, target, quantity=1, areas=None, exclude_areas=None,
     first = milp(objective, integrality=integrality, bounds=bounds, constraints=constraint, options=options)
     if not first.success:
         if first.status == 2:
+            missing=[r for r in row_ids if not items[r]['craftable'] and r not in free_ids|external_ids
+                     and not any(rates[a].get(r,0)>0 for a in location_ids)]
+            places=sorted({all_locations[src['location_id']]['name'] for src in catalog['sources'].values()
+                           if src['kind']=='explore' and src['item_id'] in missing
+                           and src['location_id'] in all_locations and not src.get('conditions',{}).get('frozen')})
+            if missing and places:
+                raise InfeasiblePlan('Target cannot be crafted: the selected areas cannot supply enough '+', '.join(items[r]['name'] for r in missing)+
+                                     '. Enable the required areas in Available areas: '+', '.join(places)+'.')
             raise InfeasiblePlan('Target cannot be crafted from the selected exploration drops, inventory, and enabled free supplies.')
         raise ValueError('Solver did not prove optimality: ' + first.message)
     optimum = float(first.fun) if continuous else int(round(first.fun))
@@ -178,9 +186,11 @@ def plan(catalog, target, quantity=1, areas=None, exclude_areas=None,
                     if items[ref]['craftable'] else goals[ref])
         free_supply = max(0., reserved - remaining) if ref in free_ids else 0
         external_supply = max(0., reserved - remaining) if ref in external_ids else 0
-        remaining += free_supply + external_supply
+        automatic = math.ceil(external_supply-1e-8) if external_supply>1e-8 else 0
+        remaining += free_supply + automatic
         surplus = max(0., remaining - reserved)
-        row = {'item_id': ref, 'name': items[ref]['name'], 'starting_inventory': stock[ref],
+        row = {'item_id': ref, 'name': items[ref]['name'], 'starting_inventory': stock[ref] + automatic,
+               'entered_starting_inventory': stock[ref], 'auto_starting_inventory': automatic,
                'expected_exploration_drops': explored[ref], 'crafted': produced[ref],
                'free_perk_supply': free_supply, 'required_external_supply': external_supply,
                'consumed_by_crafting': consumed[ref], 'reserved_target_output': reserved,
@@ -229,7 +239,7 @@ def plan(catalog, target, quantity=1, areas=None, exclude_areas=None,
             'resource_saver': resource_saver, 'resource_saver_model': 'Expected credited output including duplicates; ingredients divided by 1 + bonus at each recipe level. No inventory-cap refunds or per-batch rounding.', 'integer_explores_and_crafts': not continuous,
             'unlimited_free_items': [{'id': i, 'name': items[i]['name']} for i in sorted(free_ids)],
             'all_selected_areas_assumed_accessible': True, 'inventory_capacity': None,
-            'other_non_exploration_supply': 'Non-explorable ingredient shortfalls must be supplied separately; listed in required_external_supply',
+            'other_non_exploration_supply': 'Non-explorable primary ingredient shortfalls are automatically included in starting inventory; auto_starting_inventory identifies supplies the player must bring',
             'completion_guaranteed': False,
             'limitations': 'Expected yields are not a stochastic stopping-time estimate. No inventory caps, exploration order, Craftworks timing/slots, or automatic secondary-target selection modeled.'},
         'allowed_areas': [{'id': i, 'name': all_locations[i]['name']} for i in location_ids],

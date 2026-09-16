@@ -349,3 +349,7 @@ dialog,#suggestionsDialog{position:fixed;inset:0;margin:auto;max-height:calc(100
 .clear-plan{flex:none;min-height:48px;padding:12px 18px;border:1px solid var(--line);border-radius:10px;color:var(--muted);background:transparent;cursor:pointer}
 .clear-plan:hover{color:var(--text);border-color:currentColor}
 @media(max-width:800px){.plan-actions{gap:8px}.clear-plan{padding:12px;min-height:44px}}
+.starting-consumed{margin:16px 0;padding:16px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.starting-supplies{display:flex;flex-wrap:wrap;gap:10px}.starting-supplies>div{display:flex;align-items:center;gap:10px;flex-wrap:wrap;border:1px solid var(--line);padding:10px 12px;border-radius:8px;font-size:13px}.starting-supplies small{color:var(--muted)}
+#autoInventory{margin:16px 0}#autoInventory h3,.starting-consumed h3{font-size:14px}
+@media(max-width:800px){.starting-supplies{display:grid;grid-template-columns:1fr}.starting-supplies small{flex-basis:100%}}
