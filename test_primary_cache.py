@@ -5,6 +5,15 @@ import browser_engine
 from test_planner import small_catalog
 
 class PrimaryCacheTests(unittest.TestCase):
+    def test_guide_and_main_defaults_share_cache(self):
+        catalog=small_catalog()
+        payload=dict(targets={'Target':2},areas=['joint','a','b'])
+        browser_engine.compute(catalog,dict(payload,planner_mode='goals',inventory={},combinations_mode=False,
+            resource_saver=0,iron_depot=False,runecube=False))
+        with patch('browser_engine.ranked_plans',side_effect=AssertionError('Primary search repeated')):
+            preview=browser_engine.guided_compute(catalog,dict(payload,material='4',candidates=[]))
+            self.assertEqual(preview['options'],[])
+
     def test_reuse_invalidation_and_isolation(self):
         catalog=small_catalog()
         payload={'targets':{'Target':2},'areas':None,'max_areas':2}

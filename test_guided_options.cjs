@@ -1,0 +1,14 @@
+const fs=require('fs'),vm=require('vm'),assert=require('assert/strict');
+const source=fs.readFileSync('web/guided.js','utf8');
+const c={fmt:n=>Number(n).toLocaleString('en-US',{maximumFractionDigits:2}),guidePicks:new Map(),state:{targets:{},secondary:[]}};vm.createContext(c);
+vm.runInContext(source.slice(source.indexOf('function guidedExploreIncrease('),source.indexOf('function showGuidedChoices(')),c);
+assert.equal(c.guidedExploreIncrease({total_explores:125,extra_explores:25}),'+25%');
+assert.equal(c.guidedExploreIncrease({total_explores:100,extra_explores:0}),'0%');
+assert.equal(c.guidedExploreIncrease({total_explores:100,extra_explores:100}),'new exploration · no previous explores');
+assert.equal(c.guidedExploreIncrease({total_explores:100001,extra_explores:1}),'+<0.1%');
+const a={goal:{item_id:'1',cap:100,allow_exploration:true}},b={goal:{item_id:'1',cap:50,allow_exploration:true}},other={goal:{item_id:'2',cap:50,allow_exploration:true}};
+c.guidePicks.set('1',a);assert.equal(c.guidedPickState(a).checked,true);assert.equal(c.guidedPickState(a).disabled,false);assert.equal(c.guidedPickState(b).disabled,true);assert.equal(c.guidedPickState(other).disabled,false);
+c.guidePicks.clear();assert.equal(c.guidedPickState(b).disabled,false);
+c.state.secondary.push({item_id:'1'});assert.equal(c.guidedPickState(a).disabled,true);
+c.state.targets['2']=100;assert.equal(c.guidedPickState(other).disabled,true);
+console.log('Guided unique-selection guards and percentage baselines passed.');

@@ -43,6 +43,7 @@ class Application:
             if item['name'] == 'Minnows' and item['id'] in workshop_ingredients:
                 passive.setdefault(item['id'], {'item_id': item['id'], 'sources': ['Trout/Bait Farm']})
         return {'planner_api_version': 2, 'items': [{'id': i, 'name': x['name'], 'image': x.get('image'), 'craftable': x['craftable'], 'explorable': i in exploration_target_ids(self.catalog),
+                           'farm_produced': x.get('type') == 'crop' or i in passive,
                            'output_quantity': x['output_quantity'], 'raw_materials': x['raw_materials'], 'direct_ingredients': x['direct_ingredients']}
                           for i, x in self.catalog['items'].items()],
                 'locations': [{**x, 'image': read_json(ROOT / 'data/location-icons.json').get(x['id'])} for x in self.catalog['locations'].values() if x['kind'] == 'explore'],

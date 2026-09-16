@@ -7,7 +7,7 @@ const fallbackIcon='<svg class="gameicon fallbackicon" viewBox="0 0 24 24" aria-
 
 function itemIcon(idOrName){const i=items[idOrName]||Object.values(items).find(i=>i.name===idOrName);const path=i?.image;return typeof path==='string'&&path.startsWith('/img/')?`<img class="gameicon" data-item-info="${esc(i.id)}" src="https://farmrpg.com${esc(path)}" width="24" height="24" alt="" loading="lazy" referrerpolicy="no-referrer">`:fallbackIcon;}
 
-function mmBadge(id){return [['MM',globalThis.TOWER_MM?.items?.[id]],['GM',globalThis.TOWER_MM?.gm_items?.[id]]].map(([label,levels])=>levels?.length?`<span class="mmbadge ${label==='GM'?'gmbadge':''}" title="Required for Tower Level ${esc(levels.join(', '))}" aria-label="${label}: Required for Tower Level ${esc(levels.join(', '))}">${label}</span>`:'').join('');}
+function mmBadge(id){return [['MM',globalThis.TOWER_MM?.items?.[id]],['GM',globalThis.TOWER_MM?.gm_items?.[id]]].map(([label,levels])=>levels?.length?`<span class="mmbadge ${label==='GM'?'gmbadge':''}" title="Required for Tower Level ${esc(levels.join(', '))}" aria-label="${label}: Required for Tower Level ${esc(levels.join(', '))}">${label}<small class="tower-level">${esc(levels.join('/'))}</small></span>`:'').join('');}
 function itemName(id,name){return `<span class="itemname" data-item-info="${esc(id)}" tabindex="0">${itemIcon(id)}<span>${esc(name)}</span>${mmBadge(id)}</span>`;}
 
 document.addEventListener('error',e=>{if(e.target.matches?.('img.gameicon'))e.target.outerHTML=fallbackIcon;},true);
@@ -16,7 +16,7 @@ function settingIcons(){document.querySelectorAll('[data-setting-icon]').forEach
 
 let catalog, items={}, state, result=null, selected=0, consumers=[], revision=0, timer, lastSuccess=null;
 
-const defaults={selected_plan:0,selected_plan_key:"",planner_mode:'goals',production_interval:60,passive_inventory:'{}',craftworks_slots:10,inventory_size:10000,route_method:'AP',route_foods:{},secondary:[],automatic_areas:null,theme:'dark',resource_saver:0,wanderer:0,lemon_squeezer:false,cinnamon:false,cider_rolls:{},effectiveness_upgrades:{},sprint_shoes:0,targets:{'167':1000},iron_depot:true,runecube:false,mode:'best',max_areas:15,areas:null,inventory:'{}'};
+const defaults={map_use_void:[],map_hidden:[],map_voided:[],tower_level:0,map_positions:{},guided_skipped:[],quest_selection:[],selected_plan:0,selected_plan_key:"",planner_mode:'goals',production_interval:60,passive_inventory:'{}',craftworks_slots:10,inventory_size:10000,route_method:'AP',route_foods:{},secondary:[],automatic_areas:null,theme:'dark',resource_saver:0,wanderer:0,lemon_squeezer:false,cinnamon:false,cider_rolls:{},effectiveness_upgrades:{},sprint_shoes:0,targets:{'167':1000},iron_depot:true,runecube:false,mode:'best',max_areas:15,areas:null,inventory:'{}'};
 
 async function api(url,body){return browserPlanner.api(url,body);}
 
@@ -128,7 +128,7 @@ $('planChoices').innerHTML=result.plans.map((p,i)=>`<button type="button" class=
 
 $('planChoices').addEventListener('click',e=>{const b=e.target.closest('[data-plan]');if(b){selected=Number(b.dataset.plan);rememberPlanChoice();planChoices();detail();}});
 
-function detail(){const p=result.plans[selected];$('planDetail').innerHTML=`<p class="hint">Pick a material to find crafts that use it. These are totals for the whole plan: what’s left and what your leftover crafts use. Finished leftover crafts are included; your primary targets are kept aside. You can still pick materials showing 0.</p><button type="button" id="suggestAll" class="primary">Suggest item</button> <button type="button" id="automaticMaximize" class="primary">Automatic Maximize</button><p class="hint">Try a leftover plan automatically, then compare before applying.</p>${state.automatic_areas?`<p class="hint">Automatic plan: checked crafts aim for their chosen batch caps. Extra exploring is limited to ${state.automatic_areas.map(id=>esc(catalog.locations.find(a=>a.id===id)?.name||id)).join(', ')}. <button type="button" id="clearAutomaticAreas">Allow all available areas</button></p>`:''}<label class="sr" for="unusedSearch">Filter unused items</label><input id="unusedSearch" placeholder="Search materials…"><table class="unusedtable"><thead><tr><th>Material</th><th>Expected unused*</th><th>Used by leftover craft*</th></tr></thead><tbody id="unusedRows"></tbody></table><p class="hint">*Rounded down to whole items. Calculations use the full values.</p>`;unused();$('unusedSearch').oninput=unused;summaryCosts();secondaryRows(true);implicitRows(p);renderRoute();startingSupplyReport(p);}
+function detail(){const p=result.plans[selected];$('planDetail').innerHTML=`<p class="hint">Pick a material to find crafts that use it. These are totals for the whole plan: what’s left and what your leftover crafts use. Finished leftover crafts are included; your primary targets are kept aside. You can still pick materials showing 0.</p><button type="button" id="startGuided" class="primary">Guide me through leftovers</button> <button type="button" id="suggestAll" class="primary">Suggest item</button> <button type="button" id="automaticMaximize" class="primary">Automatic Maximize</button><p class="hint">Try a leftover plan automatically, then compare before applying.</p>${state.automatic_areas?`<p class="hint">Automatic plan: checked crafts aim for their chosen batch caps. Extra exploring is limited to ${state.automatic_areas.map(id=>esc(catalog.locations.find(a=>a.id===id)?.name||id)).join(', ')}. <button type="button" id="clearAutomaticAreas">Allow all available areas</button></p>`:''}<label class="sr" for="unusedSearch">Filter unused items</label><input id="unusedSearch" placeholder="Search materials…"><table class="unusedtable"><thead><tr><th>Material</th><th>Expected unused*</th><th>Used by leftover craft*</th></tr></thead><tbody id="unusedRows"></tbody></table><p class="hint">*Rounded down to whole items. Calculations use the full values.</p>`;unused();$('unusedSearch').oninput=unused;summaryCosts();secondaryRows(true);implicitRows(p);renderRoute();startingSupplyReport(p);window.dispatchEvent(new Event('planner-result'));}
 
 function implicitRows(p){
 
@@ -335,8 +335,14 @@ function withSettingDefaults(input){
 }
 function validatePlanSettings(input){
  const fail=m=>{throw Error('Plan: '+m);},object=v=>v&&typeof v==='object'&&!Array.isArray(v),out=withSettingDefaults(input);
+ if(!Array.isArray(out.map_hidden)||out.map_hidden.some(id=>typeof id!=='string'))fail('Invalid hidden materials');
+ if(!Array.isArray(out.map_use_void)||out.map_use_void.some(id=>typeof id!=='string'))fail('Invalid use and void materials');
+ if(!Array.isArray(out.map_voided)||out.map_voided.some(id=>typeof id!=='string'))fail('Invalid voided materials');
+ if(!Array.isArray(out.guided_skipped)||out.guided_skipped.some(id=>typeof id!=='string'))fail('Invalid skipped materials');
+ if(!Array.isArray(out.quest_selection)||out.quest_selection.some(id=>typeof id!=='string'))fail('Invalid quest selection');
  if(!Number.isInteger(out.selected_plan)||out.selected_plan<0||out.selected_plan>100000||typeof out.selected_plan_key!=='string'||out.selected_plan_key.length>2000)fail('Invalid selected plan');
- const ranges={craftworks_slots:[1,100],inventory_size:[1,1000000000],resource_saver:[0,45],wanderer:[0,33],sprint_shoes:[0,3]};
+ if(!out.map_positions||typeof out.map_positions!=='object'||Array.isArray(out.map_positions)||Object.values(out.map_positions).some(p=>!p||!Number.isFinite(p.x)||!Number.isFinite(p.y)||p.x<0||p.y<0||p.x>1000000||p.y>1000000))fail('Invalid map positions');
+ const ranges={tower_level:[0,10000],craftworks_slots:[1,100],inventory_size:[1,1000000000],resource_saver:[0,45],wanderer:[0,33],sprint_shoes:[0,3]};
  for(const [k,[lo,hi]] of Object.entries(ranges))if(typeof out[k]!=='number'||!Number.isFinite(out[k])||out[k]<lo||out[k]>hi||(['craftworks_slots','inventory_size','sprint_shoes'].includes(k)&&!Number.isInteger(out[k])))fail('Invalid '+k);
  for(const k of ['iron_depot','runecube','lemon_squeezer','cinnamon'])if(typeof out[k]!=='boolean')fail('Invalid '+k);
  for(const [k,values] of Object.entries({planner_mode:['goals','passive'],theme:['dark','light'],route_method:['AP','Cider'],mode:['best','combinations']}))if(!values.includes(out[k]))fail('Invalid '+k);
@@ -362,7 +368,7 @@ $('clearPlan').onclick=()=>{if(state)$('clearPlanDialog').showModal();};
 $('cancelClearPlan').onclick=()=>$('clearPlanDialog').close();
 $('confirmClearPlan').onclick=()=>{
  clearTimeout(timer);revision++;
- state.targets={};state.secondary=[];state.automatic_areas=null;state.inventory='{}';state.passive_inventory='{}';
+ state.targets={};state.secondary=[];state.automatic_areas=null;state.guided_skipped=[];state.map_voided=[];state.map_use_void=[];state.map_hidden=[];state.quest_selection=[];state.inventory='{}';state.passive_inventory='{}';
  $('clearPlanDialog').close();error('');$('inventoryError').hidden=true;
  for(const id of ['itemInput','inventoryItem','planCode'])$(id).value='';
  $('planCodeStatus').textContent='';targets();inventoryRows();resetEmptyPlan();

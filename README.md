@@ -312,3 +312,33 @@ Passive production mode starts with one batch of supplied items and no reserved 
 Automatic Maximize compares a fresh leftover plan with no extra exploring, the requested number of additional locations, and one more location. It retains the selected primary route and respects checked available areas. A bounded greedy search scans all recipes, evaluates four promising crafts per round (up to 12 selected outputs), and keeps four candidate location sets at each depth. Its score weights total original-material consumption and the average fraction used across material types. Tiny craft counts get no breadth bonus. Three exploration-cost weights search for a balanced recommendation and materially different lower-cost/higher-use alternatives; percentages and per-material usage make the tradeoff visible. Automatically selected batch caps are explicit exploration aims (`automatic_batch`), rather than being silently reduced by the normal scarce-ingredient reference. These aims remain bounded by the cap, exploration cost, and actual material constraints. Search is bounded to 4,000 evaluated candidate plans across the comparison. Extra explores have no percentage cap; their ranking penalty is normalized by primary explores (or estimated exploration replacement cost in passive mode). It is a heuristic, not proof of optimality; identical alternatives are valid.
 
 Comparisons run in the browser worker, can be cancelled by closing the dialog, and leave inputs untouched until applied. Applying replaces the secondary craft list with capped suggestions and stores `automatic_areas` to reproduce the permitted extra-exploration scope on recalculation/save reload. Existing primary locations remain usable. The user can remove this scope restriction from the material chooser. Non-explorable missing supplies are never automatically invented for suggested crafts.
+
+
+### Guided leftover planning and quests (v0.1.16)
+
+- Under Primary targets, switch Items / Quests. Questlines and ordered steps come
+  directly from Buddy Farm. Selected steps add their combined craftable/explorable
+  requirements; other items and silver remain visible as external requirements.
+  Rewards, unlocks and quest availability are not simulated. Imported quest IDs
+  prevent adding the same steps twice; Clear all resets them.
+- Route Planner → Guide me through leftovers reviews unreserved ingredients one
+  at a time. It shortlists up to five ready and five assisted recipes and tests
+  full, half and quarter assisted batches in the existing shared-pool solver.
+  Each option reports consumption of existing stock, extra exploration, new areas,
+  and reductions to existing leftover crafts. The other-options selector can
+  evaluate recipes beyond the initial shortlist. These are not global optima.
+- Accepted choices become ordinary capped leftover targets. Skipped materials are
+  remembered in saves but remain available as ingredients; Review skipped materials
+  brings them back. Finished reserved outputs are not offered for consumption again.
+- Refresh the committed quest snapshot with `.venv/Scripts/python.exe sync_quests.py`.
+  Building and hosting remain static; visitors do not need to contact Buddy Farm.
+- Checks: `python -m unittest test_guided` and `node test_guided_wasm.cjs` verify
+  preview/apply consistency, missing ingredients, and ordered quest data.
+
+### Crafting map (v0.1.20)
+
+The desktop map follows exploration sources through shared ingredients to primary item or quest targets on the right. Click an item or its + connector to choose another craft. Proposed crafts share ingredient nodes, with missing quantities shown as dashed cards. Click a shortage to choose an exploration source, then **Preview changes** to compare the combined crafts, extra explores (including percentage), and new locations. **Apply to route and Craftworks** adds the proposal to the existing planner. Draft quantities are aims; the preview shows the solver's actual shared allocation.
+
+Set your Tower level to put upcoming MM/GM requirements first in craft suggestions. Earlier requirements are not treated as already mastered. Click any card to inspect it; Expand map, zoom, Fit, and scrolling help navigate larger plans. Craft choices show ingredient availability, and red warnings open the missing ingredient. Use Review & apply changes, then Add these crafts to my plan to commit a draft. Tower level is saved with the plan; uncommitted draft proposals are not.
+
+The map offers **Add and use all** (shows shortages for the full batch) and **Use as much as possible, void the rest** (caps the draft at available supplies without extra exploring). **Mark as Void** accepts surplus and mutes its card; it does not remove ingredients from the solver and can be undone. Primary targets and their ingredient chains cannot be deleted from the map. Deleting an optional ingredient also removes the optional crafts that require it, listed beside the delete action. Free Iron/Nails are included when calculating craftable intermediates; Iron Rings still require Stone.

@@ -254,7 +254,7 @@ def plan(catalog, target, quantity=1, areas=None, exclude_areas=None,
 def ranked_plans(catalog, target, quantity=1, areas=None, exclude_areas=None,
                  inventory=None, iron_depot=False, runecube=False, max_areas=None,
                  progress=None, combinations_mode=False, resource_saver=0):
-    """Optimize every unordered allowed-area subset, then merge realized sets.
+    """Find distinct best routes, or enumerate exact area sets when requested.
 
     Areas may receive zero explores. Permutations, zero-use areas, and alternate
     allocations with the same realized area set are not separate options.
@@ -290,17 +290,39 @@ def ranked_plans(catalog, target, quantity=1, areas=None, exclude_areas=None,
     total = sum(math.comb(len(candidates), size) for size in range(1, size_limit + 1))
     results = [baseline] if baseline['optimal_total_explores'] == 0 else []
     infeasible = checked = 0
-    for size in range(1, size_limit + 1):
-        for subset in combinations(candidates, size):
+    if not combinations_mode and size_limit == len(candidates):
+        # If a subset still contains all areas used by an optimum, that optimum
+        # remains feasible and optimal there. Only removing a used area can
+        # force a different route; branch on those exclusions and memoize scopes.
+        queue = [frozenset(candidates)] if candidates and baseline['optimal_total_explores'] else []
+        visited = set()
+        while queue:
+            scope = queue.pop()
+            if scope in visited or not scope: continue
+            visited.add(scope)
             try:
-                result = plan(catalog, target, quantity, list(subset), None, inventory,
-                              iron_depot, runecube, require_all_areas=combinations_mode, resource_saver=resource_saver)
+                result = baseline if scope == frozenset(candidates) else plan(
+                    catalog, target, quantity, sorted(scope), None, inventory,
+                    iron_depot, runecube, resource_saver=resource_saver)
                 results.append(result)
+                used = {a['location_id'] for a in result['areas'] if a['explores'] > 0}
+                queue.extend(scope - {area} for area in sorted(used))
             except InfeasiblePlan:
                 infeasible += 1
             checked += 1
-            if progress and (checked % 32 == 0 or checked == total):
-                progress(checked, total)
+            if progress: progress(checked, None)
+    else:
+        for size in range(1, size_limit + 1):
+            for subset in combinations(candidates, size):
+                try:
+                    result = plan(catalog, target, quantity, list(subset), None, inventory,
+                                  iron_depot, runecube, require_all_areas=combinations_mode, resource_saver=resource_saver)
+                    results.append(result)
+                except InfeasiblePlan:
+                    infeasible += 1
+                checked += 1
+                if progress and (checked % 32 == 0 or checked == total):
+                    progress(checked, total)
     deduplicated = {}
     for result in results:
         key = tuple(sorted(a['location_id'] for a in result['areas']))
@@ -321,7 +343,7 @@ def ranked_plans(catalog, target, quantity=1, areas=None, exclude_areas=None,
             'catalog_snapshot_sha256': catalog.get('snapshot_sha256'),
             'assumptions': baseline['assumptions'],
             'enumeration': {'mode': 'combinations' if combinations_mode else 'best',
-                'meaning': ('Require at least one explore in every selected area; one minimum per unordered set.' if combinations_mode else 'Optimize every unordered candidate area subset, allowing zero-use areas. Deduplicate by the areas actually used. One representative optimum per subset, not every tied allocation.'),
+                'meaning': ('Require at least one explore in every selected area; one minimum per unordered set.' if combinations_mode else 'Find distinct best routes by excluding used areas; skip scopes containing an already feasible optimum. One representative per realized area set, not every tied allocation.'),
                 'candidate_areas': [{'id': i, 'name': catalog['locations'][i]['name']} for i in candidates],
                 'excluded_irrelevant_areas': [{'id': i, 'name': catalog['locations'][i]['name']} for i in sorted(allowed - useful)],
                 'max_areas': size_limit, 'combinations_checked': checked, 'infeasible_combinations': infeasible,

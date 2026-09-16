@@ -4,7 +4,7 @@ const browserPlanner=(()=>{
  const version=document.querySelector('.appversion')?.textContent.trim()||'dev';
  function asset(name){const url=new URL(name,document.baseURI);url.searchParams.set('v',version);return url;}
  async function data(){return bundle??=fetch(asset('catalog.json')).then(r=>{if(!r.ok)throw Error('Could not load catalog');return r.json();});}
- function cancel(){if(worker){worker.terminate();worker=null;}if(active&&jobs.has(active))jobs.set(active,{status:'error',error:'Superseded by a newer plan.'});active=null;}
+ function cancel(){if(worker&&active){worker.terminate();worker=null;}if(active&&jobs.has(active))jobs.set(active,{status:'error',error:'Superseded by a newer plan.'});active=null;}
  async function api(url,payload){
   if(url==='/api/catalog')return (await data()).metadata;
   if(url.startsWith('/api/item/')){const c=(await data()).catalog,item=c.items[url.split('/').at(-1)];if(!item)throw Error('Item not found');return {item,sources:item.source_ids.map(id=>{const s=c.sources[id];return {...s,location_name:c.locations[s.location_id]?.name};})};}

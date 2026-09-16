@@ -357,3 +357,41 @@ dialog,#suggestionsDialog{position:fixed;inset:0;margin:auto;max-height:calc(100
 #automaticDialog{width:min(1100px,calc(100vw - 32px));max-height:90dvh;overflow:auto}#automaticLocations{max-width:110px;margin:8px 0}#automaticReport{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin-top:20px}#automaticReport>.hint{grid-column:1/-1}.automatic-option{border:1px solid var(--line);border-radius:12px;padding:18px;min-width:0}.automatic-option h3{margin:0 0 8px}.automatic-option dl{margin:16px 0}.automatic-option dl>div{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;margin:10px 0}.automatic-option dt{color:var(--muted);font-size:13px}.automatic-option dd{margin:0;font-weight:700}.automatic-option>button{margin-top:16px;width:100%}.automatic-output{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid var(--line)}.automatic-output .itemname{min-width:0}#automaticStatus{min-height:24px;margin-top:16px}@media(max-width:800px){#automaticReport{grid-template-columns:1fr}#automaticDialog{max-height:90dvh}.automatic-option{padding:14px}}
 
 .automatic-rules{margin:12px 0 20px;font-size:13px}.automatic-rules summary{cursor:pointer;color:var(--muted)}
+
+/* Guided planning: compact desktop comparisons, stacked phone cards. */
+#guidedDialog{width:min(850px,calc(100vw - 32px));max-height:90dvh;overflow-y:auto;box-sizing:border-box}
+#guidedDialog select,.quest-picker select{width:100%;max-width:100%;margin:8px 0 12px}
+.guide-actions{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0}
+.guide-choice{border:1px solid var(--border,#36504c);border-radius:12px;padding:16px;margin:14px 0}
+.guide-choice h3{display:flex;align-items:center;flex-wrap:wrap;gap:12px;margin:0 0 12px}
+.guide-choice dl{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:12px 0}
+.guide-choice dt{font-size:.8rem;opacity:.75}.guide-choice dd{margin:4px 0 0;overflow-wrap:anywhere}
+.guide-choice small{font-weight:400}.quest-picker{margin:16px 0}.quest-picker .modebuttons{width:fit-content;margin-bottom:12px}
+#questInputs{border:1px solid var(--border,#36504c);border-radius:12px;padding:16px}
+#questSteps{max-height:280px;overflow-y:auto;margin:12px 0}.quest-step{display:flex;gap:10px;align-items:center;padding:8px 0}
+.quest-step input{width:auto;flex:none}.quest-requirement{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:6px 0}
+.quest-requirement small{opacity:.75}#guidedOther{margin-top:16px}
+@media(max-width:600px){#guidedDialog{padding:16px;width:calc(100vw - 20px)}#guidedDialog .sectiontitle{align-items:flex-start;gap:12px;flex-wrap:wrap}.guide-choice dl{grid-template-columns:1fr}.guide-choice{padding:12px}.guide-actions button{flex:1 1 100%}.quest-requirement small{width:100%}}
+
+#guidedDialog button,.quest-picker button{border:1px solid var(--line);border-radius:8px;padding:10px 14px;background:var(--surface,#edf3ee);color:inherit;min-height:42px}
+#guidedDialog button.primary,.quest-picker button.primary{background:var(--green);color:white}
+[data-theme=dark] #guidedDialog button,[data-theme=dark] .quest-picker button{background:#283c30;color:#e0eddf}
+[data-theme=dark] #guidedDialog button.primary,[data-theme=dark] .quest-picker button.primary{background:#c6ef91;color:#183b2c}
+#guidedDialog #finishGuide{flex:0 0 auto;width:auto;white-space:nowrap}
+#guidedDialog .sectiontitle{flex-wrap:wrap;align-items:center}
+.quest-picker .modebuttons button[aria-pressed="true"]{background:var(--green);color:white}[data-theme=dark] .quest-picker .modebuttons button[aria-pressed="true"]{background:#c6ef91;color:#183b2c}
+
+.quest-bulk{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:10px 0}.quest-bulk small{color:var(--muted)}
+.quest-picker .quest-bulk button{padding:5px 10px;min-height:32px;font-size:12px}
+#questSteps{display:flex;flex-wrap:wrap;gap:6px;max-height:170px;margin:8px 0 14px}
+.quest-step{padding:6px 9px;border:1px solid var(--line);border-radius:7px;font-size:12px;gap:6px;margin:0;min-height:34px}
+.quest-step input,.guide-select input{width:16px;height:16px;margin:0;flex:none}
+.guide-select{display:flex;align-items:center;gap:8px;padding:10px;border:1px solid var(--line);border-radius:8px;cursor:pointer}
+.guide-basket{padding:12px;border:1px solid var(--line);border-radius:10px;margin:12px 0;background:var(--surface,#edf3ee)}
+[data-theme=dark] .guide-basket{background:#22332a}.guide-basket>span{display:inline-block;margin:0 12px 8px 0}
+.itemname .mmbadge{flex:0 0 auto;width:auto;min-width:28px;height:30px;padding:3px 4px;flex-direction:column;gap:3px}
+.itemname .mmbadge .tower-level{font-size:9px;line-height:1;font-weight:600;white-space:nowrap;letter-spacing:0}
+
+.explore-increase{display:inline-block;font-size:.85em;padding:3px 7px;border:1px solid var(--line);border-radius:5px;margin-left:5px;font-weight:600}.guide-select:has(input:disabled){opacity:.6;cursor:not-allowed}
+
+.mmbadge,.itemname .mmbadge,.map-node-label>.mmbadge{align-items:center;justify-content:center;text-align:center}.mmbadge .tower-level{display:block;width:100%;text-align:center;margin:0;padding:0}

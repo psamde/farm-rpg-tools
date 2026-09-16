@@ -12,17 +12,18 @@ async function initialize(){
  py.globals.set('catalog_json',JSON.stringify((await response.json()).catalog));
  py.globals.set('highs_solve',(lp,opts)=>JSON.stringify(experiments.solve(lp,JSON.parse(opts))));
  py.runPython('from wasm_solver import install\ninstall(highs_solve)');
- py.runPython('import json, sys\nsys.path.insert(0, "/home/pyodide")\nfrom browser_engine import compute, automatic_compute\ncatalog = json.loads(catalog_json)');
+ py.runPython('import json, sys\nsys.path.insert(0, "/home/pyodide")\nfrom browser_engine import compute, automatic_compute, guided_compute\ncatalog = json.loads(catalog_json)');
  return py;
 }
 self.onmessage=async({data})=>{try{
- self.postMessage({status:'running',message:'Loading Python and SciPy in your browser...'});
+ self.postMessage({status:'running',message:runtime?'Preparing calculation…':'Loading Python and SciPy in your browser…'});
  const py=await (runtime??=initialize());
  experiments.configure({});
  py.globals.set('payload_json',JSON.stringify(data));
- if(data.action==='automatic'){
+ if(data.action==='automatic'||data.action==='guided'){
   py.globals.set('automatic_progress',message=>self.postMessage({status:'running',message}));
-  const result=JSON.parse(py.runPython('json.dumps(automatic_compute(catalog, json.loads(payload_json), automatic_progress), allow_nan=False)'));
+  const method=data.action==='guided'?'guided_compute':'automatic_compute';
+  const result=JSON.parse(py.runPython('json.dumps('+method+'(catalog, json.loads(payload_json), automatic_progress), allow_nan=False)'));
   self.postMessage({status:'complete',result});return;
  }
  let comparing=false;
