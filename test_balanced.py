@@ -23,6 +23,40 @@ class BalancedTests(unittest.TestCase):
             self.assertGreaterEqual(b['expected_final_inventory']+1e-6,b['reserved_target_output'])
         self.assertEqual(sum(a['explores'] for a in r['areas']),r['optimal_total_explores'])
 
+    def test_shared_demand_percentages_survive_solve_and_reordering(self):
+        c,p=self.fixture()
+        for percent in (25, 50, 100):
+            rows=[dict(item_id=r,cap=int(basis*percent/100),allow_exploration=False,
+                       consumer_mode='available',demand_group='1',demand_basis=basis,demand_percent=percent)
+                  for r,basis in [('5',100),('6',200)]]
+            result=consume_leftovers(c,p,rows)
+            counts={g['item_id']:g['crafts'] for g in result['secondary']['targets']}
+            self.assertGreater(counts['5'],0)
+            self.assertLessEqual(abs(counts['6']-2*counts['5']),2)
+            self.balanced(result)
+            reversed_result=consume_leftovers(c,p,rows[::-1])
+            self.assertEqual(counts,{g['item_id']:g['crafts'] for g in reversed_result['secondary']['targets']})
+
+    def test_forced_consumer_reserves_supply_and_others_keep_sharing(self):
+        c,p=self.fixture()
+        c['items']['9']=dict(id='9',name='Forced',craftable=True,direct_ingredients={'1':1},output_quantity=1)
+        rows=[dict(item_id=r,cap=100,consumer_mode='available',demand_group='1',demand_basis=100,demand_percent=100)
+              for r in ('5','6')]
+        rows.append(dict(item_id='9',cap=40,consumer_mode='fixed'))
+        for ordered in (rows, rows[::-1]):
+            result=consume_leftovers(c,p,ordered)
+            counts={g['item_id']:g['crafts'] for g in result['secondary']['targets']}
+            self.assertEqual(counts['9'],40)
+            self.assertGreater(counts['5'],0)
+            self.assertLessEqual(abs(counts['5']-counts['6']),1)
+            self.balanced(result)
+        rows[-1]['cap']=200
+        result=consume_leftovers(c,p,rows)
+        counts={g['item_id']:g['crafts'] for g in result['secondary']['targets']}
+        self.assertLess(counts['9'],200)
+        self.assertLessEqual(abs(counts['5']-counts['6']),1)
+        self.balanced(result)
+
     def test_breadth_and_visual_reordering(self):
         c,p=self.fixture()
         rows=[{'item_id':'5','allow_exploration':False},{'item_id':'6','allow_exploration':False}]

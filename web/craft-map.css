@@ -41,3 +41,23 @@
 .map-inventory-supply{border:1px solid var(--line);border-radius:8px;padding:10px;margin:12px 0;display:grid;grid-template-columns:1fr 1fr;gap:8px}.map-inventory-supply label,.map-inventory-supply small{grid-column:1/-1}.map-inventory-supply small{color:var(--muted);font-size:11px}.map-inventory-supply input{min-width:0}
 
 .map-display-settings #mapUnusedMode{width:auto;flex:none}.craft-map #mapUnusedMode button{border:0;background:transparent;color:var(--muted);padding:6px 12px;min-height:32px}.craft-map #mapUnusedMode button[aria-pressed="true"]{background:var(--green);color:white}[data-theme=dark] .craft-map #mapUnusedMode button[aria-pressed="true"]{background:#c6ef91;color:#19382c}#mapUnusedLabel{font-size:12px}
+
+.map-choice{border:1px solid var(--line);border-radius:9px;margin:10px 0;overflow:hidden}
+.map-choice-summary{position:relative;display:flex;flex-direction:column;gap:6px;padding:12px 32px 12px 12px;cursor:pointer;list-style:none}
+.map-choice-summary::-webkit-details-marker{display:none}
+.map-choice-summary::after{content:'›';position:absolute;right:12px;top:14px;font-size:20px;line-height:1}
+.map-choice[open]>.map-choice-summary::after{transform:rotate(90deg)}
+.map-choice-title{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-weight:600}
+.map-choice-availability{font-size:11px;line-height:1.45;color:var(--muted)}
+.map-choice-availability.ready{color:#438662}
+.map-choice-summary>small{font-size:10px;color:var(--muted)}
+.map-choice[open]>.map-choice-summary{border-bottom:1px solid var(--line)}
+.map-choice>.map-add-actions{padding:10px}
+html[data-theme=dark] .map-choice-availability.ready{color:#9cd4ad}
+
+.map-node-modes{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0;padding:12px;border:1px solid var(--line);border-radius:8px}.map-node-modes>p,.map-node-modes>label{width:100%;margin:0}.map-node-modes button[aria-pressed=true]{border-color:#75ad85;background:#75ad8522}.map-node-modes input{margin-top:5px}
+
+.map-node-modes{display:block;padding:0;border:0}.map-node-modes>button{display:block;width:100%;margin:0 0 8px;text-align:center}.map-node-modes>label{display:block;margin:10px 0 8px}.map-node-modes>p{margin:8px 0}.map-node-modes select{width:100%;margin-top:5px}
+
+.map-node .map-port{display:flex;align-items:center;justify-content:center;padding:0;line-height:1;text-indent:0;box-sizing:border-box}
+.map-source-coverage{display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-top:5px}

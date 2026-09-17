@@ -25,7 +25,7 @@ function buildCraftMap(items,plan,settings,drafts=[],expanded=[]){
  roots.forEach(activate);
  // Keep the recipe visible when a selected leftover craft currently makes zero.
  function showInactive(id){if(free(id)||!items[id]?.craftable||inactiveRecipes.has(id)||crafted(id)>1e-8)return;inactiveRecipes.add(id);for(const child of Object.keys(items[id].direct_ingredients)){active.add(child);showInactive(child);}}
- for(const goal of settings.secondary||[])if(crafted(goal.item_id)<1e-8)showInactive(goal.item_id);
+ for(const goal of [...(settings.secondary||[]),...drafts])if(crafted(goal.item_id)<1e-8)showInactive(goal.item_id);
  const primaryCrafts=plan.crafts_in_dependency_order?Object.fromEntries(plan.crafts_in_dependency_order.map(c=>[c.item_id,c.crafts])):null;
  const protectedIds=new Set();
  function protect(id){if(protectedIds.has(id)||!items[id])return;protectedIds.add(id);const count=primaryCrafts?primaryCrafts[id]||0:(balances[id]?.crafted||0);if(!free(id)&&count>1e-8)Object.keys(items[id].direct_ingredients).forEach(protect);}
@@ -128,6 +128,7 @@ function craftMapUsage(n){
  if(n.voided||n.useVoid)return 'void';
  if(n.kind!=='item'||n.free)return '';
  if(n.missing>=10||n.warningBlocked)return 'pending';
+ if(!n.primary&&n.totalSupply!=null&&n.totalSupply<1&&!n.explorationSupplied&&!n.fromInventory)return 'unused';
  return n.primary||n.stock<1?'fulfilled':'unused';
 }
 if(typeof module!=='undefined')module.exports.craftMapUsage=craftMapUsage;
@@ -163,3 +164,42 @@ if(typeof module!=='undefined')module.exports.craftMapNodeLabels=craftMapNodeLab
 
 function visibleCraftMapGaps(gaps){return gaps.filter(([,quantity])=>quantity>=10);}
 if(typeof module!=='undefined')module.exports.visibleCraftMapGaps=visibleCraftMapGaps;
+
+// Count distinct other ingredients across the chain; free perk supplies need no setup.
+function craftMapRecipeComplexity(items,id,focus,settings){
+ const seen=new Set();
+ function visit(ref){if(ref===focus||seen.has(ref)||settings.iron_depot&&['Iron','Nails'].includes(items[ref]?.name))return;seen.add(ref);for(const child of Object.keys(items[ref]?.direct_ingredients||{}))visit(child);}
+ for(const ref of Object.keys(items[id]?.direct_ingredients||{}))visit(ref);
+ return seen.size;
+}
+if(typeof module!=='undefined')module.exports.craftMapRecipeComplexity=craftMapRecipeComplexity;
+
+// A separate, bounded what-if: use existing supplies, never drops from hypothetical exploration.
+function craftMapPotential(items,plan,settings,drafts){
+ const proposed=drafts.map(g=>({...g})), goals=[];
+ for(const g of proposed){
+  if(!(g.available_only||g.cap===0))continue;
+  const others=proposed.filter(x=>x!==g), graph=buildCraftMap(items,plan,settings,others);
+  const focus=g.void_source||Object.keys(items[g.item_id]?.direct_ingredients||{}).filter(ref=>!graph.nodes.find(n=>n.id===ref)?.free).sort((a,b)=>(graph.nodes.find(n=>n.id===b)?.stock||0)-(graph.nodes.find(n=>n.id===a)?.stock||0))[0];
+  if(!focus)continue;
+  const stock=graph.nodes.find(n=>n.id===focus)?.stock||0;
+  if(stock<1)continue;
+  const aim=craftMapAddOptions(items,plan,settings,others,g.item_id,focus).all;
+  if(aim>g.cap){g.cap=aim;goals.push({...g});}
+ }
+ const graph=buildCraftMap(items,plan,settings,proposed);
+ return {goals,graph};
+}
+if(typeof module!=='undefined')module.exports.craftMapPotential=craftMapPotential;
+
+// Freeze demand before adding exploration: extra drops cannot grow these goals.
+function craftMapDemandAllocation(items,goals,potential,id,percent){
+ const aims=new Map(potential.map(g=>[g.item_id,g.cap]));
+ const connected=goals.filter(g=>g.item_id!==id&&craftMapDependents(items,[g],id).length);
+ const available=g=>g.consumer_mode==='available'||(!g.consumer_mode&&g.available_only===true);
+ return connected.filter(available).map(g=>{
+  const basis=g.demand_group===id?g.demand_basis:Math.max(g.cap||0,aims.get(g.item_id)||0);
+  return {...g,cap:Math.floor(basis*percent/100),consumer_mode:'available',demand_group:id,demand_basis:basis,demand_percent:percent,available_only:false,void_source:null,automatic_batch:true,prioritize:false};
+ }).filter(g=>g.demand_basis>0);
+}
+if(typeof module!=='undefined')module.exports.craftMapDemandAllocation=craftMapDemandAllocation;

@@ -421,3 +421,5 @@ dialog,#suggestionsDialog{position:fixed;inset:0;margin:auto;max-height:calc(100
 .route-period{font-size:12px;font-weight:400;color:var(--muted);margin-left:8px}
 
 .modebuttons button:disabled{opacity:.4;cursor:not-allowed;filter:grayscale(1)}
+
+.seasonal-zones-heading{grid-column:1 / -1;border-top:1px solid var(--line);padding-top:16px;margin-top:6px}.seasonal-zones-heading h3{font-size:14px;margin:0 0 4px}.seasonal-zones-heading .hint{margin:0}

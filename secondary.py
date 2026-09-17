@@ -38,7 +38,16 @@ def validate_secondary(catalog, rows):
                 return any(child == anchor or contains(child) for child in catalog['items'][parent]['direct_ingredients'])
             if not contains(ref):
                 raise ValueError('The exploration ingredient must be part of this recipe.')
-        result.append({'item_id': ref, 'allow_exploration': assist, 'prioritize': prioritize, 'cap': cap, 'automatic_batch': automatic, **({'exploration_item_id': anchor} if anchor is not None else {})})
+        mode = row.get('consumer_mode')
+        if mode not in (None, 'available', 'fixed'): raise ValueError('Invalid consumer mode.')
+        allocation = {'consumer_mode': mode}
+        if row.get('demand_group') is not None:
+            group = resolve(catalog['items'], str(row['demand_group']))
+            basis, percent = row.get('demand_basis'), row.get('demand_percent')
+            if not isinstance(basis, (int, float)) or not math.isfinite(basis) or not 0 < basis <= 100000000 or not isinstance(percent, (int, float)) or not math.isfinite(percent) or not 0 <= percent <= 100:
+                raise ValueError('Invalid shared demand allocation.')
+            allocation.update(demand_group=group, demand_basis=basis, demand_percent=percent)
+        result.append({'item_id': ref, 'allow_exploration': assist, 'prioritize': prioritize, 'cap': cap, 'automatic_batch': automatic, **allocation, **({'exploration_item_id': anchor} if anchor is not None else {})})
     return result
 
 

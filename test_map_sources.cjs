@@ -1,0 +1,6 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+const text=fs.readFileSync('web/craft-map.js','utf8');let placed=false;const host={};
+const source=(location_id,rate)=>({kind:'explore',location_id,location_name:location_id,expected_drops_per_explore:rate});
+const ctx=vm.createContext({mapCandidateToken:0,mapPotential:{graph:{nodes:[{id:"hide",name:"Hide",kind:"item",missing:40}]}},$:id=>id==='mapOptions'?host:id==='mapFindSources'?{after:h=>{placed=h===host;}}:null,state:{areas:['Forest','Cave']},mapGraph:{nodes:[{id:'mushroom',kind:'item',missing:100},{id:'hide',name:'Hide',kind:'item',missing:0}]},mapPlan:{areas:[]},api:async path=>({sources:path.endsWith('mushroom')?[source('Forest',1),source('Cave',2)]:[source('Forest',.5)]}),explorationYieldMultiplier:()=>1,fmt:String,esc:String,itemName:(_,name)=>name});
+vm.runInContext(text.slice(text.indexOf('async function mapSources'),text.indexOf('function mapUnusedText')),ctx);
+(async()=>{await ctx.mapSources('mushroom');assert(placed);assert.match(host.innerHTML,/Hide · Covers this shortage/);assert.match(host.innerHTML,/No other missing ingredients supplied/);console.log('Source list appears after its trigger and distinguishes shared shortage coverage.');})().catch(e=>{console.error(e);process.exitCode=1;});

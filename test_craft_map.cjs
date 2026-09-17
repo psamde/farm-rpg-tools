@@ -141,3 +141,37 @@ const missingFarm=laneLayoutCraftMap([...ns,{id:'straw',name:'Straw',kind:'item'
 assert.equal(missingFarm.assignments.straw,'disconnected');
 assert.ok(missingFarm.positions.straw.y<missingFarm.positions.crop.y);
 assert.ok(missingFarm.positions.straw.y<missingFarm.positions.exclusive.y);
+
+// Zero-output optional crafts can expose bounded demand without adding exploration.
+{
+ const {craftMapPotential}=require('./web/craft-map-model.js');
+ const supplies={ 'White Parchment':100, 'Purple Parchment':100 };
+ const p={areas:[],item_balances:Object.entries(supplies).map(([name,q])=>({item_id:id(name),expected_unused:q,crafted:0}))};
+ const ds=[{item_id:id('Purple Diary'),cap:0,available_only:true,void_source:id('White Parchment')}];
+ const before=JSON.stringify(ds);
+ const potential=craftMapPotential(items,p,{targets:{},secondary:[]},ds);
+ assert.equal(potential.goals[0].cap,100);
+ assert.equal(potential.graph.missing[id('Mushroom')],300);
+ assert.equal(potential.graph.nodes.find(n=>n.id===id('Mushroom Paste')).need,100);
+ assert.equal(JSON.stringify(ds),before);
+ const fixed=potential.goals.map(g=>({...g,available_only:false,void_source:null}));
+ assert.equal(craftMapPotential(items,p,{targets:{},secondary:[]},fixed).goals.length,0);
+ const graph=buildCraftMap(items,p,{targets:{},secondary:[]},ds);
+ assert(graph.nodes.some(n=>n.id===id('Mushroom')));
+ assert(graph.links.some(l=>l.from===id('Mushroom Paste')&&l.to===id('Purple Diary')));
+ console.log('Zero-output diary potential is bounded by existing parchment, keeps recipe links, and freezes when accepted.');
+}
+const {craftMapDemandAllocation}=require('./web/craft-map-model.js');
+{
+ const catalog={raw:{direct_ingredients:{}},a:{direct_ingredients:{raw:1}},b:{direct_ingredients:{raw:2}}};
+ const goals=[{item_id:'a',cap:0,consumer_mode:'available'},{item_id:'b',cap:20,consumer_mode:'available'}];
+ const half=craftMapDemandAllocation(catalog,goals,[{item_id:'a',cap:100},{item_id:'b',cap:200}],'raw',50);
+ assert.deepEqual(half.map(g=>g.cap),[50,100]);
+ const quarter=craftMapDemandAllocation(catalog,half,[],'raw',25);
+ assert.deepEqual(quarter.map(g=>g.cap),[25,50]);
+ assert.deepEqual(goals.map(g=>g.cap),[0,20]);
+ assert(quarter.every(g=>g.demand_group==='raw'));
+ console.log('Shared demand percentages use fixed original aims, include zero crafts, and never compound after edits.');
+}
+
+{ const rows=craftMapDemandAllocation({raw:{direct_ingredients:{}},a:{direct_ingredients:{raw:1}},b:{direct_ingredients:{raw:1}}},[{item_id:'a',cap:100,consumer_mode:'available'},{item_id:'b',cap:200,consumer_mode:'fixed'}],[],'raw',50);assert.equal(rows.length,1);assert.equal(rows[0].cap,50);assert.equal(rows[0].demand_group,'raw');}

@@ -81,6 +81,17 @@ def consume(catalog, primary, goals, areas=None, max_areas=15, progress=None):
     for cols in Z.values():
         for k,col in enumerate(cols): high[col]=breaks[k+1]-breaks[k]
     constraints=[LinearConstraint(matrix,[-pool[r] for r in refs],np.inf)]
+    # Explicit shared-demand groups complete equal proportions, independent of list order.
+    groups = {}
+    for g in goals:
+        if g.get('consumer_mode') == 'available' and g.get('demand_group') and g['item_id'] in C and caps.get(g['item_id'], 0) > 0:
+            groups.setdefault(g['demand_group'], []).append(g)
+    for ingredient, members in groups.items():
+        first = members[0]['item_id']
+        for g in members[1:]:
+            r = g['item_id']; row = np.zeros(n)
+            row[C[first]] = 1 / caps[first]; row[C[r]] = -1 / caps[r]
+            constraints.append(LinearConstraint(row, 0, 0))
     cost_scale=max(1,primary['optimal_total_explores'])
     # Passive mode uses the cost of obtaining its actual stock as a reference.
     if primary['optimal_total_explores']==0:
@@ -174,6 +185,15 @@ def consume(catalog, primary, goals, areas=None, max_areas=15, progress=None):
     x=utility(set(scales),scales,.25) if scales else solve(np.zeros(n))
     extra_e={a:int(math.ceil(max(0,x[col])-1e-7)) for a,col in E.items()}
     for a,col in E.items(): low[col]=high[col]=extra_e[a]
+    # Honor explicit quantities before sharing the remainder. If they cannot all
+    # be supplied, keep the feasible result; the map reports the unmet quantities.
+    fixed = {g['item_id']: caps[g['item_id']] for g in goals
+             if g.get('consumer_mode') == 'fixed' and g['item_id'] in C and caps.get(g['item_id'], 0) > 0}
+    if fixed:
+        reserved = utility(set(fixed), fixed, 0)
+        for r in fixed:
+            row = np.zeros(n); row[C[r]] = 1
+            constraints.append(LinearConstraint(row, max(0, reserved[C[r]]-1e-7), np.inf))
     maxima={}
     for g in goals:
         r=g['item_id']
