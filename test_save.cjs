@@ -58,3 +58,32 @@ const automaticBatch={...input,secondary:[{item_id:'craft',cap:50,allow_explorat
 assert.equal(c.decodePlanCode(c.encodePlanCode(automaticBatch)).secondary[0].automatic_batch,true);
 assert.throws(()=>c.decodePlanCode(c.encodePlanCode({...automaticBatch,secondary:[{...automaticBatch.secondary[0],automatic_batch:'yes'}]})));
 console.log('Automatic batches retain their selected exploration aim in saves');
+
+// Map saves contain user intent, not the last computed amount. In particular a
+// paused material must not permanently erase limits or fixed consumer goals.
+c.items.fixedCraft={craftable:true,direct_ingredients:{raw:2},output_quantity:1};
+c.items.uncappedCraft={craftable:true,direct_ingredients:{raw:3},output_quantity:1};
+const mapSave={...input,map_planning:true,map_sources:{raw:['area']},map_node_usage:{raw:{mode:'void'}},map_voided:['raw'],
+ secondary:[
+  {item_id:'craft',consumer_mode:'available',cap:2500,user_cap:true,allow_exploration:false,available_only:true},
+  {item_id:'fixedCraft',consumer_mode:'fixed',cap:400,user_cap:false,allow_exploration:false,automatic_batch:true},
+  {item_id:'uncappedCraft',consumer_mode:'available',cap:null,user_cap:false,allow_exploration:false,available_only:true}
+ ]};
+const restoredMap=c.decodePlanCode(c.encodePlanCode(mapSave));
+assert.equal(restoredMap.map_planning,true);assert.deepEqual(Array.from(restoredMap.map_sources.raw),['area']);
+assert.equal(restoredMap.map_node_usage.raw.mode,'void');assert.deepEqual(Array.from(restoredMap.map_voided),['raw']);
+assert.deepEqual(JSON.parse(JSON.stringify(restoredMap.secondary)),mapSave.secondary);
+const oldMap=c.decodePlanCode(oldCode);
+assert.equal(oldMap.map_planning,false);assert.equal(Object.keys(oldMap.map_sources).length,0);assert.equal(Object.keys(oldMap.map_node_usage).length,0);
+assert.throws(()=>c.decodePlanCode(c.encodePlanCode({...mapSave,secondary:[{...mapSave.secondary[0],user_cap:'yes'}]})));
+assert.throws(()=>c.decodePlanCode(c.encodePlanCode({...mapSave,secondary:[{...mapSave.secondary[0],consumer_mode:'unknown'}]})));
+assert.throws(()=>c.decodePlanCode(c.encodePlanCode({...mapSave,map_sources:{raw:['unknown']}})));
+const mapSource=fs.readFileSync('web/craft-map.js','utf8');
+const intentContext=vm.createContext({state:restoredMap,items:c.items,mapDrafts:[]});
+vm.runInContext(fs.readFileSync('web/craft-map-model.js','utf8'),intentContext);
+vm.runInContext(mapSource.slice(mapSource.indexOf('function mapGoals()'),mapSource.indexOf('function mapQueuePreview()')),intentContext);
+assert.equal(vm.runInContext('mapRequestGoals().every(g=>g.cap===0)',intentContext),true,'saved pause applies without destroying saved goals');
+vm.runInContext("state.map_node_usage.raw={mode:'use'};",intentContext);
+const resumed=JSON.parse(vm.runInContext('JSON.stringify(mapRequestGoals())',intentContext));
+assert.deepEqual(resumed.map(g=>[g.consumer_mode,g.cap,g.user_cap]),[['available',2500,true],['fixed',400,false],['available',null,false]]);
+console.log('Map source selections, paused nodes, fixed goals, explicit soft limits, and uncapped consumers survive save/load and reversible resume');

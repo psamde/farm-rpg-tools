@@ -5,7 +5,7 @@ guideUI.innerHTML=`<div class="sectiontitle"><h2 id="guidedTitle">Put your lefto
 document.body.append(guideUI);
 let guideApplying=false,guideBusy=false,guidePicks=new Map(),guideCombined=null;
 let guideToken=0,guideRevision=0,guideChoices=[],guideShown=5,guideStock={},guideEstimates=[];
-function guidePayload(){return {action:'guided',combinations_mode:state.mode==='combinations',planner_mode:state.planner_mode,targets:state.planner_mode==='passive'?{}:{...state.targets},secondary:state.secondary.map(g=>({...g})),areas:[...state.areas],automatic_areas:state.automatic_areas,inventory:inventoryData(),resource_saver:state.resource_saver,iron_depot:state.iron_depot,runecube:state.runecube,cockatrice_ether_source:state.cockatrice_ether_source,selected_plan_key:result.plans[selected].area_set_id};}
+function guidePayload(){return {action:'guided',map_planning:state.map_planning===true,map_sources:state.map_sources||{},combinations_mode:state.mode==='combinations',planner_mode:state.planner_mode,targets:state.planner_mode==='passive'?{}:{...state.targets},secondary:state.secondary.map(g=>({...g})),areas:[...state.areas],automatic_areas:state.automatic_areas,inventory:inventoryData(),resource_saver:state.resource_saver,iron_depot:state.iron_depot,runecube:state.runecube,cockatrice_ether_source:state.cockatrice_ether_source,selected_plan_key:result.plans[selected].area_set_id};}
 function stopGuide(){guideToken++;if(guideBusy&&!guideApplying)browserPlanner.cancel();guideUI.close();}
 $('finishGuide').onclick=stopGuide;
 guideUI.addEventListener('cancel',()=>{guideToken++;if(guideBusy&&!guideApplying)browserPlanner.cancel();});

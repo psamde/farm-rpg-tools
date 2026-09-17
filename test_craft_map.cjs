@@ -46,6 +46,10 @@ for(let i=1;i<ys.length;i++)assert.ok(ys[i]-ys[i-1]>=141.99);
 const {craftMapUsage}=require('./web/craft-map-model.js');
 assert.equal(craftMapUsage({kind:'item',stock:100}),'unused');
 assert.equal(craftMapUsage({kind:'item',stock:.4}),'fulfilled');
+assert.equal(craftMapUsage({kind:'item',stock:1,totalSupply:369613}),'fulfilled');
+assert.equal(craftMapUsage({kind:'item',stock:99,totalSupply:100000}),'fulfilled');
+assert.equal(craftMapUsage({kind:'item',stock:100,totalSupply:100000}),'unused');
+assert.equal(craftMapUsage({kind:'item',stock:1,totalSupply:369613,missing:10}),'pending');
 assert.equal(craftMapUsage({kind:'item',stock:0,missing:10}),'pending');
 console.log('Floating crafts center between ingredients; crowded columns do not overlap; usage colors passed.');
 const {craftMapCandidateGaps}=require('./web/craft-map-model.js');
@@ -175,3 +179,11 @@ const {craftMapDemandAllocation}=require('./web/craft-map-model.js');
 }
 
 { const rows=craftMapDemandAllocation({raw:{direct_ingredients:{}},a:{direct_ingredients:{raw:1}},b:{direct_ingredients:{raw:1}}},[{item_id:'a',cap:100,consumer_mode:'available'},{item_id:'b',cap:200,consumer_mode:'fixed'}],[],'raw',50);assert.equal(rows.length,1);assert.equal(rows[0].cap,50);assert.equal(rows[0].demand_group,'raw');}
+
+{
+ const straw={id:'straw',name:'Straw',kind:'item',depth:1,crafts:0};
+ const meta={straw:{farm_produced:false}};
+ assert.equal(laneLayoutCraftMap([straw],[],meta).assignments.straw,'disconnected');
+ const forest={id:'area:forest',location:'forest',kind:'area',name:'Forest',depth:0};
+ assert.equal(laneLayoutCraftMap([straw,forest],[{from:forest.id,to:'straw'}],meta).assignments.straw,forest.id);
+}

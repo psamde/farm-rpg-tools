@@ -40,7 +40,7 @@ def validate_secondary(catalog, rows):
                 raise ValueError('The exploration ingredient must be part of this recipe.')
         mode = row.get('consumer_mode')
         if mode not in (None, 'available', 'fixed'): raise ValueError('Invalid consumer mode.')
-        allocation = {'consumer_mode': mode}
+        allocation = {'consumer_mode': mode, **({'user_cap': True} if row.get('user_cap') is True else {})}
         if row.get('demand_group') is not None:
             group = resolve(catalog['items'], str(row['demand_group']))
             basis, percent = row.get('demand_basis'), row.get('demand_percent')
@@ -51,11 +51,11 @@ def validate_secondary(catalog, rows):
     return result
 
 
-def consume_leftovers(catalog, primary, requested, areas=None, max_areas=15, progress=None, defer_comparison=None):
+def consume_leftovers(catalog, primary, requested, areas=None, max_areas=15, progress=None, defer_comparison=None, *, map_planning=False, map_sources=None):
     from balanced import consume
     goals = validate_secondary(catalog, requested)
     if not goals: return primary
-    return consume(catalog,primary,goals,areas,max_areas,progress)
+    return consume(catalog,primary,goals,areas,max_areas,progress,map_planning=map_planning,map_sources=map_sources)
 
 
 def _consume_priority_legacy(catalog, primary, requested, areas=None, max_areas=15, progress=None, defer_comparison=None):
