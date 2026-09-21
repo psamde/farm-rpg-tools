@@ -73,6 +73,9 @@ function buildCraftMap(items,plan,settings,drafts=[],expanded=[]){
  function showInactive(id){if(free(id)||!items[id]?.craftable||inactiveRecipes.has(id)||crafted(id)>1e-8)return;inactiveRecipes.add(id);for(const child of Object.keys(items[id].direct_ingredients)){active.add(child);showInactive(child);}}
  for(const goal of [...(settings.secondary||[]),...drafts])if(crafted(goal.item_id)<1e-8)showInactive(goal.item_id);
  const primaryCrafts=plan.crafts_in_dependency_order?Object.fromEntries(plan.crafts_in_dependency_order.map(c=>[c.item_id,c.crafts])):null;
+ const requiredUse={};
+ for(const [id,count] of Object.entries(primaryCrafts||{}))
+  for(const [child,q] of Object.entries(items[id]?.direct_ingredients||{}))requiredUse[child]=(requiredUse[child]||0)+count*q*factor;
  const protectedIds=new Set();
  function protect(id){if(protectedIds.has(id)||!items[id])return;protectedIds.add(id);const count=primaryCrafts?primaryCrafts[id]||0:(balances[id]?.crafted||0);if(!free(id)&&count>1e-8)Object.keys(items[id].direct_ingredients).forEach(protect);}
  Object.keys(settings.targets||{}).forEach(protect);
@@ -86,6 +89,7 @@ function buildCraftMap(items,plan,settings,drafts=[],expanded=[]){
   for(const output of area.items)if(output.expected_drops>0&&spareIds.has(output.item_id))seen.add(output.item_id);
  expanded.forEach(id=>{if(items[id])seen.add(id);});
  for(const id of seen){const b=balances[id]||{};nodes.set(id,{id,kind:'item',name:items[id].name,externalSource:craftMapExternalSource(items[id]),autoSupply:craftMapAutoSupplied(items[id],settings),automaticAmount:b.auto_starting_inventory||0,primary:Object.hasOwn(settings.targets||{},id),secondary:(settings.secondary||[]).some(g=>g.item_id===id),draft:drafts.some(g=>g.item_id===id),soft:[...drafts,...(settings.secondary||[])].some(g=>g.item_id===id&&craftMapIsSoft(g)),missing:missing[id]||0,need:demand[id]||0,crafts:(b.crafted||0)/items[id].output_quantity+(draftCrafts[id]||0),draftCrafts:draftCrafts[id]||0,stock:Math.max(0,available(b)+(draftCrafts[id]||0)*items[id].output_quantity-(demand[id]||0)),fromInventory:(b.starting_inventory||0)>0,currentStock:available(b),totalSupply:Math.max(available(b),(b.starting_inventory||0)+(b.expected_exploration_drops||0)+(b.free_perk_supply||0)+(b.crafted||0))+(draftCrafts[id]||0)*items[id].output_quantity,explorationSupplied:plan.areas.some(a=>a.items.some(o=>o.item_id===id&&o.expected_drops>0)),protected:protectedIds.has(id),voided:(settings.map_voided||[]).includes(id),useVoid:(settings.map_use_void||[]).includes(id),free:free(id),depth:1});}
+ for(const n of nodes.values())n.requiredUse=(requiredUse[n.id]||0)+(balances[n.id]?.reserved_target_output||0);
  const blockedMemo=new Map();
  function blocked(id,threshold=1e-8){const key=id+':'+threshold;if(blockedMemo.has(key))return blockedMemo.get(key);const value=!free(id)&&Boolean((missing[id]||0)>=threshold||crafted(id)>1e-8&&Object.keys(items[id].direct_ingredients).some(child=>blocked(child,threshold)));blockedMemo.set(key,value);return value;}
  for(const node of nodes.values()){node.blocked=blocked(node.id);node.warningBlocked=blocked(node.id,10);}
@@ -253,9 +257,28 @@ if(typeof module!=='undefined')Object.assign(module.exports,{craftMapAddOptions,
 
 function craftMapNodeLabels(n,nodes,links){
  const required=Boolean(n.protected||n.primary||(n.kind!=='item'&&links.some(l=>l.from===n.id&&nodes.some(child=>child.id===l.to&&child.protected))));
- return {requirement:n.explorationSupplied?'EXPLORE OUTPUT NODE':required?'REQUIRED NODE':'OPTIONAL NODE',mode:n.voided?'Void/Sell':n.useVoid?'Use + Void':n.autoSupply?'AUTO SUPPLIED':n.fromInventory?'FROM INVENTORY':''};
+ return {requirement:n.explorationSupplied?'EXPLORE OUTPUT NODE':required?'REQUIRED NODE':'OPTIONAL NODE',mode:n.voided?(n.requiredUse>0?'Use required + Void/Sell':'Void/Sell'):n.useVoid?'Use + Void':n.autoSupply?'AUTO SUPPLIED':n.fromInventory?'FROM INVENTORY':''};
 }
 if(typeof module!=='undefined')module.exports.craftMapNodeLabels=craftMapNodeLabels;
+
+// Use the rendered graph, including idle recipes and proposed supplies, so the
+// inspector lists exactly the connections visible on the canvas.
+function craftMapConnections(id,nodes,links){
+ const byId=new Map(nodes.map(n=>[n.id,n]));
+ const direction=incoming=>{
+  const connected=new Map();
+  for(const link of links){
+   if((incoming?link.to:link.from)!==id)continue;
+   const ref=incoming?link.from:link.to,node=byId.get(ref);
+   if(!node||ref===id)continue;
+   const previous=connected.get(ref);
+   if(!previous||link.quantity>previous.quantity)connected.set(ref,{node,quantity:link.quantity||0,phantom:!!link.phantom});
+  }
+  return [...connected.values()].sort((a,b)=>a.node.name.localeCompare(b.node.name));
+ };
+ return {inputs:direction(true),outputs:direction(false)};
+}
+if(typeof module!=='undefined')module.exports.craftMapConnections=craftMapConnections;
 
 function visibleCraftMapGaps(gaps){return gaps.filter(([,quantity])=>quantity>=10);}
 if(typeof module!=='undefined')module.exports.visibleCraftMapGaps=visibleCraftMapGaps;

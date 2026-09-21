@@ -59,6 +59,16 @@ html[data-theme=dark] .map-choice-availability.ready{color:#9cd4ad}
 
 .map-node-modes{display:block;padding:0;border:0}.map-node-modes>button{display:block;width:100%;margin:0 0 8px;text-align:center}.map-node-modes>label{display:block;margin:10px 0 8px}.map-node-modes>p{margin:8px 0}.map-node-modes select{width:100%;margin-top:5px}
 
+.map-connections{display:grid;gap:12px;margin:14px 0;padding:12px 0;border-block:1px solid var(--line)}
+.map-connections h4{display:flex;gap:8px;align-items:center;margin:0 0 6px;font-size:11px;color:var(--muted)}
+.map-connections h4 small{font-weight:400}
+.craft-map .map-connection{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;padding:7px 8px;margin:4px 0;text-align:left;font-size:11px}
+.map-connection>span:first-child{min-width:0;flex:1}.map-connection .itemname{flex-wrap:wrap}.map-connection small{display:block;margin-top:4px;font-size:10px;color:var(--muted)}
+.map-required-use{padding:8px 10px;border-left:2px solid #75ad85;background:#75ad8512;line-height:1.5}
+.map-existing-choice{display:grid;gap:8px}.map-existing-choice>small{color:var(--muted);font-size:11px}
+.craft-map .map-existing-link{width:100%;margin-top:8px;font-size:11px}
+.map-existing-extra{margin-top:10px}.map-existing-extra>summary{font-size:12px;cursor:pointer}
+
 .map-node .map-port{display:flex;align-items:center;justify-content:center;padding:0;line-height:1;text-indent:0;box-sizing:border-box}
 .map-source-coverage{display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-top:5px}
 
