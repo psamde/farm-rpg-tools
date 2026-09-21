@@ -5,18 +5,26 @@
  function remaining(settings){
   return Object.fromEntries(Object.entries(settings.targets||{}).map(([id,q])=>[id,Math.max(0,q-(settings.provided_targets?.[id]?.quantity||0))]).filter(([,q])=>q>0));
  }
- function provide(settings,id){
-  const q=remaining(settings)[id]||0;if(!q)return;
-  const stock=JSON.parse(settings.inventory||'{}'),taken=Math.min(q,stock[id]||0),old=settings.provided_targets?.[id];
-  if(taken)stock[id]-=taken;
-  settings.inventory=JSON.stringify(stock);
-  settings.provided_targets={...settings.provided_targets,[id]:{quantity:(old?.quantity||0)+q,taken:(old?.taken||0)+taken}};
+ function setProvided(settings,id,quantity){
+  const total=settings.targets?.[id];
+  if(!Number.isSafeInteger(quantity)||quantity<0||quantity>total||!total)throw Error('Inventory quantity must be a whole number between zero and the total goal.');
+  const old=settings.provided_targets?.[id]||{quantity:0,taken:0};
+  if(quantity===old.quantity)return;
+  const stock=JSON.parse(settings.inventory||'{}');let taken=old.taken;
+  if(quantity>old.quantity){const extra=Math.min(quantity-old.quantity,stock[id]||0);taken+=extra;if(extra)stock[id]-=extra;}
+  // Release only real stock that was reserved. Assumed/bought supplies never
+  // become starting inventory when the user moves the split back to crafting.
+  else if(taken>quantity){stock[id]=(stock[id]||0)+taken-quantity;taken=quantity;}
+  settings.inventory=JSON.stringify(stock);settings.provided_targets??={};
+  if(quantity)settings.provided_targets[id]={quantity,taken};else delete settings.provided_targets[id];
  }
- function undo(settings,id){
-  const row=settings.provided_targets?.[id];if(!row)return;
-  const stock=JSON.parse(settings.inventory||'{}');if(row.taken)stock[id]=(stock[id]||0)+row.taken;
-  settings.inventory=JSON.stringify(stock);delete settings.provided_targets[id];
+ function setTotal(settings,id,quantity){
+  if(!Number.isSafeInteger(quantity)||quantity<1||quantity>100000000)throw Error('Total goals must be whole numbers from 1 to 100,000,000.');
+  settings.targets[id]=quantity;
+  if((settings.provided_targets?.[id]?.quantity||0)>quantity)setProvided(settings,id,quantity);
  }
+ function provide(settings,id){if(settings.targets?.[id])setProvided(settings,id,settings.targets[id]);}
+ function undo(settings,id){if(settings.provided_targets?.[id])setProvided(settings,id,0);}
  function rank(metadata,settings,personal={}){
   const locations=metadata.effort_locations||{},data={items:Object.fromEntries(metadata.items.map(i=>[i.id,i])),locations};
   const profile={...personal,resourceSaver:settings.resource_saver,ironDepot:settings.iron_depot,runecube:settings.runecube,
@@ -27,6 +35,6 @@
    return {id,quantity,remaining:pending[id]||0,cost};
   }).sort((a,b)=>Number(b.remaining>0)-Number(a.remaining>0)||((Number.isFinite(b.cost.points)?b.cost.points:-1)-(Number.isFinite(a.cost.points)?a.cost.points:-1))||data.items[a.id].name.localeCompare(data.items[b.id].name));
  }
- const api={remaining,provide,undo,rank};
+ const api={remaining,provide,undo,setProvided,setTotal,rank};
  if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.TargetCosts=api;
 })(globalThis);

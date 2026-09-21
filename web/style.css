@@ -443,33 +443,38 @@ dialog,#suggestionsDialog{position:fixed;inset:0;margin:auto;max-height:calc(100
 .quest-requirement.is-unavailable{cursor:default;opacity:.65}
 @media(max-width:600px){.quest-picker .quest-import-heading .quest-bulk button{min-height:40px}.quest-requirements-list{grid-template-columns:1fr}}
 
-/* Primary goals: comparable effort, then an explicit inventory choice. */
-.targetbar .targetrow{grid-template-columns:minmax(220px,1fr) 150px minmax(205px,auto) 32px;gap:16px;align-items:center}
-.targetbar .targetrow .targetquantity{flex-direction:column;align-items:stretch;gap:4px}.targetbar .targetrow input{width:100%}
+/* Primary goals: a fixed total split between crafting and supplied inventory. */
+.targetbar .targetrow{grid-template-columns:minmax(220px,1fr) minmax(175px,210px) minmax(200px,250px) 32px;gap:16px;align-items:start}
+.targetbar .targetrow .targetquantity{display:flex;flex-direction:column;align-items:stretch;gap:6px;margin:0;font-size:12px;width:100%}
+.targetbar .targetrow .targetquantity>.target-split-control{display:flex;gap:6px;align-items:center;width:100%}
+.targetbar .targetrow .target-split-control input{flex:1;min-width:0;max-width:none;width:0;margin:0}
+.targetbar .targetrow .target-split-control button{flex:none;padding:8px 10px;min-height:36px;border:1px solid var(--line);border-radius:7px;background:var(--panel);color:inherit;font-size:12px}
+.targetbar .targetrow .target-split-control button:hover{border-color:var(--green)}
 .targetbar .targetrow .name{flex-wrap:nowrap;justify-content:flex-start;align-items:center;min-width:0}
 .targetbar .targetrow .name>div{min-width:0}.targetbar .targetrow .itemname{flex-wrap:wrap}
+.targetbar .targetrow .target-total{display:flex;align-items:center;gap:8px;margin:8px 0 0;font-size:11px;color:var(--muted);font-weight:400}
+.targetbar .targetrow .target-total input{width:116px;max-width:116px;font-size:12px;min-height:30px;padding:4px 6px}
 .target-rank{font-size:12px;font-weight:500;color:var(--muted);min-width:20px;font-variant-numeric:tabular-nums}
 .target-effort{display:block;font-size:12px;font-weight:400;color:var(--muted);margin-top:5px}
-.target-inventory{display:flex;flex-direction:column;align-items:flex-start;gap:5px}
-.target-inventory button{border:1px solid var(--line);border-radius:7px;padding:8px 12px;background:var(--panel);color:inherit;font-size:13px;min-height:36px}
-.target-inventory button:hover{border-color:var(--green)}
-.target-inventory small,.target-provided-note{font-size:12px;color:var(--muted);font-weight:400;line-height:1.4}
+.target-inventory{display:flex;flex-direction:column;align-items:stretch;gap:5px}
+.target-inventory>small{font-size:11px;color:var(--muted);font-weight:400;line-height:1.4}
 .targetbar .target-provided{background:color-mix(in srgb,#55a977 10%,transparent)}
-.targetrow input:disabled{opacity:.65}.target-cost-note{margin:0 0 14px}
+.target-cost-note{margin:0 0 14px}
 .mailablebadge{display:inline-flex;align-items:center;justify-content:center;flex:none;padding:3px 5px;border:1px solid #507f96;border-radius:4px;background:#e5f4fb;color:#285771;font-size:9px;font-weight:650;line-height:1.1;letter-spacing:.1px;white-space:nowrap;cursor:help}
 [data-theme=dark] .mailablebadge{background:#203843;color:#bce2f3;border-color:#547b8b}
 @media(max-width:1000px){
- .targetbar .targetrow{grid-template-columns:minmax(0,1fr) 140px 32px;gap:12px}
- .targetbar .targetrow .name{grid-column:1;grid-row:1}
- .targetbar .targetrow .targetquantity{grid-column:2;grid-row:1}
+ .targetbar .targetrow{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 32px;gap:12px}
+ .targetbar .targetrow .name{grid-column:1 / 3;grid-row:1}
  .targetbar .targetrow>.iconbutton{grid-column:3;grid-row:1}
- .targetbar .targetrow .target-inventory{grid-column:1 / -1;grid-row:2;flex-direction:row;align-items:center;flex-wrap:wrap;gap:8px 12px}
+ .targetbar .targetrow>.targetquantity{grid-column:1;grid-row:2}
+ .targetbar .targetrow .target-inventory{grid-column:2 / 4;grid-row:2}
 }
 @media(max-width:600px){
- .targetbar .targetrow{grid-template-columns:minmax(0,1fr) 44px}
- .targetbar .targetrow>.iconbutton{grid-column:2}
- .targetbar .targetrow .targetquantity{grid-column:1 / -1;grid-row:2}
- .targetbar .targetrow .target-inventory{grid-row:3;align-items:flex-start;flex-direction:column;width:100%}
- .target-inventory button{min-height:44px;width:100%;font-size:14px}
+ .targetbar .targetrow{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 28px;gap:12px 8px}
+ .targetbar .targetrow .target-split-control{gap:4px}
+ .targetbar .targetrow .target-split-control input{padding:8px 6px;min-height:44px}
+ .targetbar .targetrow .target-split-control button{padding:8px;min-height:44px}
  .target-rank{min-width:14px}.targetbar .targetrow .name{align-items:flex-start}
 }
+
+.targetbar .targetrow>.iconbutton{align-self:center}

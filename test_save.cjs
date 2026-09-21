@@ -107,3 +107,6 @@ assert.deepEqual(JSON.parse(JSON.stringify(c.decodePlanCode(oldCode).provided_ta
 assert.throws(()=>c.decodePlanCode(c.encodePlanCode({...input,provided_targets:{raw:{quantity:201,taken:0}}})));
 assert.throws(()=>c.decodePlanCode(c.encodePlanCode({...input,provided_targets:{raw:{quantity:200,taken:201}}})));
 console.log('Provided goals and reserved quantities survive save/load; old saves have none.');
+
+const partialSupply={...input,provided_targets:{raw:{quantity:50,taken:3}},inventory:'{"raw":0}'};
+assert.deepEqual(JSON.parse(JSON.stringify(c.decodePlanCode(c.encodePlanCode(partialSupply)).provided_targets)),partialSupply.provided_targets);

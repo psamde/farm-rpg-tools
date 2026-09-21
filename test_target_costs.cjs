@@ -14,6 +14,25 @@ assert.equal(T.remaining(restored).a,120);
 T.undo(restored,'a');assert.equal(JSON.parse(restored.inventory).a,40);
 T.provide(state,'b');assert.deepEqual(T.remaining(state),{});
 
+const split={targets:{a:20000},inventory:'{"a":4000}',provided_targets:{}};
+T.setProvided(split,'a',5000);
+assert.deepEqual(T.remaining(split),{a:15000});
+assert.deepEqual(split.provided_targets.a,{quantity:5000,taken:4000});
+T.setProvided(split,'a',3000);
+assert.equal(T.remaining(split).a,17000);
+assert.equal(JSON.parse(split.inventory).a,1000,'return only reserved real stock');
+T.provide(split,'a');assert.deepEqual(T.remaining(split),{});
+T.undo(split,'a');assert.equal(T.remaining(split).a,20000);
+assert.equal(JSON.parse(split.inventory).a,4000,'Max in each direction neither creates nor loses stock');
+T.setProvided(split,'a',5000);T.setTotal(split,'a',2000);
+assert.deepEqual(split.provided_targets.a,{quantity:2000,taken:2000});
+assert.equal(JSON.parse(split.inventory).a,2000);
+T.setTotal(split,'a',3000);assert.equal(T.remaining(split).a,1000);
+const unchanged=JSON.stringify(split);
+for(const invalid of [-1,3001,1.5,NaN])assert.throws(()=>T.setProvided(split,'a',invalid));
+assert.equal(JSON.stringify(split),unchanged);
+console.log('Partial target splits, both Max directions, total edits and stock conservation passed.');
+
 const metadata={effort_locations:{forest:{name:'Forest',kind:'explore'}},items:[
  {id:'a',name:'A',sources:[{kind:'explore',location_id:'forest',actions_per_drop:2}],craftable:false,direct_ingredients:{}},
  {id:'b',name:'B',sources:[],craftable:true,direct_ingredients:{a:3}}
