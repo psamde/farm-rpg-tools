@@ -12,8 +12,11 @@ function inventoryRoute(plan, items, locations, settings){
  if(!Number.isFinite(wanderer)||wanderer<0||wanderer>.33)throw Error('Wanderer must be from 0 to 33%.');
  if(!Number.isInteger(capacity)||capacity<1)throw Error('Inventory size must be a positive whole number.');
  const factor=1/(1+Number(plan.assumptions.resource_saver||0)/100),free=new Set(plan.assumptions.unlimited_free_items.map(r=>r.id));
- const stock={},remaining={},order=[],seen=new Set();
- for(const b of plan.item_balances)stock[b.item_id]=b.starting_inventory+(b.auto_starting_inventory===undefined?(b.required_external_supply||0):0);
+ // Incoming supplies are a finite reserve outside the loop's inventory cap.
+ // Only drops and items crafted in the loop occupy its limited inventory.
+ const stock={},incoming={},remaining={},order=[],seen=new Set();
+ for(const b of plan.item_balances)incoming[b.item_id]=b.starting_inventory+(b.auto_starting_inventory===undefined?(b.required_external_supply||0):0);
+ const available=id=>(incoming[id]||0)+(stock[id]||0);
  for(const c of [...plan.crafts_in_dependency_order,...(plan.secondary?.crafts_in_dependency_order||[])])remaining[c.item_id]=(remaining[c.item_id]||0)+c.crafts;
  function visit(id){if(seen.has(id))return;seen.add(id);for(const child of Object.keys(items[id]?.direct_ingredients||{}))visit(child);if(remaining[id])order.push(id);}
  Object.keys(remaining).forEach(visit);
@@ -22,7 +25,6 @@ function inventoryRoute(plan, items, locations, settings){
  const continuous=slots>=order.length, stopWork=new Map(),activeWork={};
  let recording=null;
  const setups=[];for(let i=0;i<order.length;i+=slots)setups.push(order.slice(i,i+slots));
- const initialOverflow=Object.keys(stock).find(id=>!free.has(id)&&stock[id]>capacity+1e-7);
  const menuRank=id=>{const i=explorationMenuOrder.indexOf(id);return i<0?explorationMenuOrder.length:i;};
  const parts=[...plan.areas].sort((a,b)=>menuRank(a.location_id)-menuRank(b.location_id)).map(a=>{
   const loc=locations.find(l=>l.id===a.location_id),rolls=ciderEffectiveness(settings,a.location_id).rolls;
@@ -37,7 +39,7 @@ function inventoryRoute(plan, items, locations, settings){
  for(const p of parts){p.batch=Math.max(drinksPerClick,Math.ceil(p.total/rounds/drinksPerClick)*drinksPerClick);p.left=p.batch*rounds;p.scheduled=p.left;}
  // Forecast actual payable crafts, consuming ingredients as we go. A single
  // shared ingredient is not enough to put every descendant into Craftworks.
- const activeGroups=[],forecastStock={...stock},forecastRemaining=Object.fromEntries(order.map(id=>[id,Math.ceil(totals[id]/rounds)]));
+ const activeGroups=[],forecastStock={...incoming},forecastRemaining=Object.fromEntries(order.map(id=>[id,Math.ceil(totals[id]/rounds)]));
  function forecast(start,end){
   const available={...forecastStock},work={};
   for(let place=start;place<=end;place++)for(const drop of parts[place].drops)available[drop.id]=(available[drop.id]||0)+drop.q*parts[place].batch;
@@ -63,7 +65,7 @@ function inventoryRoute(plan, items, locations, settings){
   Object.assign(forecastStock,projection.available);for(const [id,n] of Object.entries(projection.work))forecastRemaining[id]-=n;start=end+1;
  }
  const interval=Math.max(1,...activeGroups.map(g=>g.end-g.start+1));
- const visits=[],empties=[];let current=0,uses=0,crafts=0,round=1,problem=initialOverflow?(plan.item_balances.find(b=>b.item_id===initialOverflow)?.auto_starting_inventory?`${items[initialOverflow]?.name||initialOverflow} supplies exceed your inventory size. Restock from your farm between visits; restocking is not yet included in loop verification.`:`${items[initialOverflow]?.name||initialOverflow} starts above your inventory size. Enter an amount you can hold at once.`):null;
+ const visits=[],empties=[];let current=0,uses=0,crafts=0,round=1,problem=null;
  // Track every stock increase, including intermediate crafted outputs. A route
  // is complete only if its entire expected inventory flow stays within capacity.
  const inventoryPeaks={};
@@ -73,10 +75,13 @@ function inventoryRoute(plan, items, locations, settings){
  }
  Object.keys(stock).forEach(checkStock);
  function craft(recipes=order){for(const id of recipes){if(problem)return;if(!remaining[id])continue;let count=Math.min(remaining[id],Math.ceil(totals[id]*round/rounds)-(totals[id]-remaining[id]));const recipe=items[id].direct_ingredients,out=items[id].output_quantity||1;
-  for(const [child,q] of Object.entries(recipe))if(!free.has(child))count=Math.min(count,Math.floor(((stock[child]||0)+1e-8)/(q*factor)));
+  for(const [child,q] of Object.entries(recipe))if(!free.has(child))count=Math.min(count,Math.floor((available(child)+1e-8)/(q*factor)));
   if(!free.has(id))count=Math.min(count,Math.floor((capacity-(stock[id]||0)+1e-8)/out));
   if(count<=0)continue;
-  for(const [child,q] of Object.entries(recipe))if(!free.has(child))stock[child]=Math.max(0,(stock[child]||0)-count*q*factor);
+  for(const [child,q] of Object.entries(recipe))if(!free.has(child)){
+   const needed=count*q*factor,provided=Math.min(incoming[child]||0,needed);
+   incoming[child]=(incoming[child]||0)-provided;stock[child]=Math.max(0,(stock[child]||0)-(needed-provided));
+  }
   if(!free.has(id))stock[id]=(stock[id]||0)+count*out;remaining[id]-=count;crafts+=count;checkStock(id);
   if(recording){if(!stopWork.has(recording))stopWork.set(recording,{});const work=stopWork.get(recording);work[id]=(work[id]||0)+count;}else activeWork[id]=(activeWork[id]||0)+count;
  }}
@@ -84,7 +89,7 @@ function inventoryRoute(plan, items, locations, settings){
  function clearFinished(){if(problem)return false;const needed={};for(const [id,n] of Object.entries(remaining))for(const [child,q] of Object.entries(items[id].direct_ingredients))needed[child]=(needed[child]||0)+n*q*factor;
   const future={};for(const p of parts)for(const d of p.drops)future[d.id]=(future[d.id]||0)+p.left*d.q;
   for(const [id,n] of Object.entries(remaining))future[id]=(future[id]||0)+n*(items[id].output_quantity||1);
-  const cleared=[];for(const [id,n] of Object.entries(stock)){const keep=Math.max(0,(needed[id]||0)-(future[id]||0));const quantity=Math.floor(n-keep+1e-8);if(quantity>0){cleared.push({id,quantity});stock[id]=n-quantity;}}
+  const cleared=[];for(const [id,n] of Object.entries(stock)){const keep=Math.max(0,(needed[id]||0)-(future[id]||0)-(incoming[id]||0));const quantity=Math.floor(n-keep+1e-8);if(quantity>0){cleared.push({id,quantity});stock[id]=n-quantity;}}
   if(cleared.length){empties.push({after:uses,items:cleared});return true;}return false;
  }
  function fits(p){return p.drops.every(d=>(stock[d.id]||0)+d.q*drinksPerClick<=capacity+1e-7);}

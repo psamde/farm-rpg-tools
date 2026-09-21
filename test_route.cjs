@@ -29,7 +29,7 @@ assert.equal(r.complete,true);assert.ok(r.rounds>1);
 for(let k=0;k<r.rounds;k++)assert.deepEqual(r.visits.slice(k*2,k*2+2).map(v=>[v.id,v.drinks]),r.parts.map(p=>[p.id,p.batch]));
 const cycleUses=r.parts.reduce((n,p)=>n+p.batch,0);assert.ok(r.empties.every(e=>e.after%cycleUses===0));
 const bigger=inventoryRoute(larger,pairedItems,[...loc,{id:'y',base_drop_rate:1}],{inventory_size:2000});assert.equal(bigger.complete,true);assert.ok(bigger.rounds<=r.rounds);
-const over={...plan,item_balances:[{item_id:'a',starting_inventory:401}]};assert.match(inventoryRoute(over,items,loc,{inventory_size:400}).problem,/starts above/);
+const over={...plan,item_balances:[{item_id:'a',starting_inventory:10000}]};assert.equal(inventoryRoute(over,items,loc,{inventory_size:400}).complete,true);
 console.log('Repeatable loop and capacity checks passed');
 
 const chainItems={a:{name:'Raw',direct_ingredients:{}},b:{name:'Middle',direct_ingredients:{a:1}},c:{name:'Final',direct_ingredients:{b:1}}};
@@ -86,9 +86,9 @@ for(const capacity of [200,400,1000])for(const slots of [1,2]){
  assert.ok(Object.values(audited.inventoryPeaks).every(q=>q<=capacity+1e-7));
  assert.ok(audited.inventoryPeaks.b>0&&audited.inventoryPeaks.c>0);
 }
-// Carry-in stock blocks a click before its drops can be consumed by Craftworks.
-const carry=inventoryRoute({...plan,item_balances:[{item_id:'a',starting_inventory:150}],crafts_in_dependency_order:[]},items,loc,{inventory_size:300,_rounds:1});
-assert.equal(carry.complete,false);assert.equal(carry.inventoryVerified,false);assert.equal(carry.uses,0);
+// Incoming stock is outside the cap, even when that item also drops in the loop.
+const carry=inventoryRoute({...plan,item_balances:[{item_id:'a',starting_inventory:10000}],crafts_in_dependency_order:[],areas:[{location_id:'x',name:'Forest',explores:200,items:[{item_id:'a',expected_drops:200}]}]},items,loc,{inventory_size:300,_rounds:1});
+assert.equal(carry.complete,true);assert.equal(carry.inventoryVerified,true);assert.equal(carry.inventoryPeaks.a,200);
 // Multiple rows for one drop must be summed before checking a whole click.
 const repeatedDrops={...plan,crafts_in_dependency_order:[],areas:[{location_id:'x',name:'Forest',explores:200,items:[{item_id:'a',expected_drops:150},{item_id:'a',expected_drops:150}]}]};
 const repeated=inventoryRoute(repeatedDrops,items,loc,{inventory_size:200});
@@ -96,4 +96,19 @@ assert.equal(repeated.complete,false);assert.equal(repeated.uses,0);
 // Combined five-drink click is checked before any crafting; no within-click relief.
 assert.equal(pieOverflow.inventoryVerified,false);
 assert.throws(()=>inventoryRoute(plan,items,loc,{inventory_size:0}),/Inventory size/);
-console.log('Expected-flow peaks, intermediate outputs, carry-in, duplicate drops and whole-click limits passed');
+console.log('Expected-flow peaks, intermediate outputs, incoming reserves, duplicate drops and whole-click limits passed');
+
+const suppliedItems={...items,potato:{name:'Potato',direct_ingredients:{}},b:{...items.b,direct_ingredients:{a:1,potato:8}}};
+const suppliedPlan={...plan,item_balances:[{item_id:'potato',starting_inventory:8000,auto_starting_inventory:8000}]};
+const supplied=inventoryRoute(suppliedPlan,suppliedItems,loc,{inventory_size:400});
+assert.equal(supplied.complete,true);
+assert.ok(Object.values(supplied.inventoryPeaks).every(n=>n<=400+1e-7));
+assert.ok(supplied.rounds>1);assert.ok(!supplied.inventoryPeaks.potato);
+assert.equal((supplied.activeWork.b||0)+supplied.craftStops.reduce((n,s)=>n+(s.amounts.b||0)*(s.id==='start'?1:supplied.rounds),0),1000);
+// The exemption removes the capacity limit, not the supplied quantity limit.
+const insufficient=inventoryRoute({...suppliedPlan,item_balances:[{item_id:'potato',starting_inventory:4000,auto_starting_inventory:4000}]},suppliedItems,loc,{inventory_size:400});
+assert.equal(insufficient.complete,false);
+// Supplied crafted items are external; newly crafted copies still need room.
+const suppliedCraft=inventoryRoute({...plan,item_balances:[{item_id:'b',starting_inventory:10000}]},items,loc,{inventory_size:400});
+assert.equal(suppliedCraft.complete,true);assert.ok(suppliedCraft.inventoryPeaks.b>0&&suppliedCraft.inventoryPeaks.b<=400);
+console.log('Large external supplies, finite amounts and separate crafted output capacity passed');

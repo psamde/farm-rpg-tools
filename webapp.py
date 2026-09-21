@@ -10,7 +10,7 @@ from uuid import uuid4
 
 from browser_engine import catalog_with_perks
 from farmdata import read_json
-from planner import plan, ranked_plans, resolve, exploration_target_ids, passive_plans
+from planner import plan, ranked_plans, resolve, exploration_target_ids, passive_plans, calculation_error
 from secondary import validate_secondary, consume_leftovers
 
 ROOT = Path(__file__).parent
@@ -131,7 +131,7 @@ class Application:
             result['enumeration']['feasible_options'] = len(result['plans'])
             job.update(status='complete', result=result)
         except Exception as error:
-            job.update(status='error', error=str(error))
+            job.update(calculation_error(error))
 
 
 def serve(port=8765):

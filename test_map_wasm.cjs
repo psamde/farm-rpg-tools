@@ -53,5 +53,17 @@ json.dumps(dict(tests=outcome.testsRun,tests_seconds=round(tests_seconds,3),
     areas=[dict(name=a['name'],explores=a['explores']) for a in final['areas']],
     crafts=case.counts(final)))
 `));
+ // Exercise the actual worker boundary: a recoverable Python error must retain
+ // its structured data and leave this same runtime usable for the next plan.
+ const worker=fs.readFileSync(path.join(root,'web/python-worker.js'),'utf8'),messages=[];
+ const scope={self:{postMessage:message=>messages.push(message)}};
+ require('node:vm').createContext(scope);
+ require('node:vm').runInContext(worker.slice(worker.indexOf('function runCalculation('),worker.indexOf('self.onmessage=')),scope);
+ const assert=require('node:assert/strict');
+ assert.equal(scope.runCalculation(py,"from planner import plan, calculation_error\nplan(MapAcceptanceTests.catalog, {'378':100}, areas=['explore:3'])"),false);
+ assert.deepEqual(JSON.parse(JSON.stringify(messages[0].inventory_shortfalls)),[{item_id:'378',name:'Water Lily',quantity:100,starting_inventory:0}]);
+ assert.equal(scope.runCalculation(py,"inventory_retry = plan(MapAcceptanceTests.catalog, {'378':100}, areas=['explore:3'], inventory={'378':100})"),true);
+ assert.equal(py.runPython("inventory_retry['optimal_total_explores']"),0);
+ console.log('Worker inventory recovery and warm-runtime retry passed.');
  console.log(JSON.stringify({...result,solver:experiments.stats(),wall_seconds:Number(((performance.now()-start)/1000).toFixed(3))},null,2));
 })().catch(error=>{console.error(error);process.exitCode=1;});

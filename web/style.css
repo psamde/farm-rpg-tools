@@ -11,6 +11,11 @@
 [data-theme=dark] .materialbutton,[data-theme=dark] .empty h2{color:#a8ddba}[data-theme=dark] .unusedtable td{border-color:var(--line)}[data-theme=dark] .bar{background:#34453d}
 [data-theme=dark] .consumer button{background:#30492f;border-color:#60765e;color:#dbefcf}
 [data-theme=dark] #error{background:#492d21;color:#ffdbc3;border-color:#895339}
+.inventory-recovery-note{font-size:13px;margin:10px 0}
+.inventory-recovery{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;padding:12px 0;border-top:1px solid currentColor}
+.inventory-recovery>span{display:flex;align-items:center;flex-wrap:wrap;gap:12px;font-size:14px;min-width:0}
+.inventory-recovery:last-child{padding-bottom:0}
+@media(max-width:560px){.inventory-recovery>span,.inventory-recovery>button{width:100%}}
 .themebutton{background:transparent;border:1px solid #789388;border-radius:6px;color:#e5eee7;font-size:12px;padding:7px 10px;white-space:nowrap}
 .costpreview{display:block;margin-top:9px;line-height:1.6}.costreport{margin:16px 0}.tablewrap{overflow-x:auto}.costreport table{border-collapse:collapse;width:100%;font-size:12px;min-width:360px}.costreport td,.costreport th{border-bottom:1px solid var(--line);padding:10px 7px;text-align:right;vertical-align:top;font-variant-numeric:tabular-nums}.costreport td:first-child,.costreport th:first-child{text-align:left}.costreport td small{display:block;color:var(--muted);margin-top:4px}.costreport th{color:var(--muted);font-weight:500}.costreport .hint{font-size:12px}#ciderSettings{max-height:300px;overflow:auto;padding:0 4px}
 

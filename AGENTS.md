@@ -1,5 +1,7 @@
 # Release versions
 
+- Push completed changes at the end of the task unless the user asks otherwise.
+
 - `VERSION` is the single source of truth for the displayed app version.
 - Bump it for every subsequent deployed change: use patch releases after 0.1
   (0.1.1, 0.1.2, etc.), unless the user requests a different release number.

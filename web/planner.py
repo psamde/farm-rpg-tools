@@ -6,7 +6,17 @@ import textwrap
 
 
 class InfeasiblePlan(ValueError):
-    pass
+    def __init__(self, message, inventory_shortfalls=None):
+        super().__init__(message)
+        self.inventory_shortfalls = inventory_shortfalls or []
+
+
+def calculation_error(error):
+    """Keep actionable ingredient data alongside the human-readable error."""
+    result = {'status': 'error', 'error': str(error)}
+    if isinstance(error, InfeasiblePlan) and error.inventory_shortfalls:
+        result['inventory_shortfalls'] = error.inventory_shortfalls
+    return result
 
 
 def resolve(records, value):
@@ -26,7 +36,7 @@ def exploration_target_ids(catalog):
 
 def plan(catalog, target, quantity=1, areas=None, exclude_areas=None,
          inventory=None, iron_depot=False, runecube=False, continuous=False,
-         require_all_areas=False, resource_saver=0):
+         require_all_areas=False, resource_saver=0, suggest_inventory=True):
     if isinstance(resource_saver, bool) or not isinstance(resource_saver, (int, float)) or not math.isfinite(resource_saver) or not 0 <= resource_saver <= 45:
         raise ValueError('Resource Saver must be a percentage from 0 to 45')
     # Resource Saver duplicates output; it is NOT a percentage discount.
@@ -139,12 +149,38 @@ def plan(catalog, target, quantity=1, areas=None, exclude_areas=None,
         if first.status == 2:
             missing=[r for r in row_ids if not items[r]['craftable'] and r not in free_ids|external_ids
                      and not any(rates[a].get(r,0)>0 for a in location_ids)]
+            shortfalls = []
+            if missing and suggest_inventory:
+                # Repair the same material-balance model with inventory only
+                # for unavailable raw items. This respects stock, intermediate
+                # drops, shared recipes, collection goals and crafting perks.
+                supplies = np.zeros((len(row_ids), len(missing)))
+                for col, ref in enumerate(missing):
+                    supplies[row_ids.index(ref), col] = 1
+                repair_matrix = np.column_stack((matrix, supplies))
+                repair = milp(np.r_[np.zeros(nloc + ncraft), np.ones(len(missing))],
+                    integrality=np.r_[integrality, np.ones(len(missing))],
+                    bounds=Bounds(np.r_[lower, np.zeros(len(missing))],
+                                  np.r_[upper, np.full(len(missing), np.inf)]),
+                    constraints=LinearConstraint(repair_matrix, demand, np.inf), options=options)
+                if repair.success:
+                    solution = repair.x.copy()
+                    if not continuous:
+                        solution[:nloc + ncraft] = np.rint(solution[:nloc + ncraft])
+                    solution[nloc + ncraft:] = np.rint(solution[nloc + ncraft:])
+                    if np.min(repair_matrix @ solution - demand) >= -1e-6:
+                        shortfalls = [dict(item_id=ref, name=items[ref]['name'],
+                                           quantity=int(solution[nloc + ncraft + col]),
+                                           starting_inventory=stock[ref])
+                                      for col, ref in enumerate(missing)
+                                      if solution[nloc + ncraft + col] > 0]
+                        missing = [row['item_id'] for row in shortfalls]
             places=sorted({all_locations[src['location_id']]['name'] for src in catalog['sources'].values()
                            if src['kind']=='explore' and src['item_id'] in missing
                            and src['location_id'] in all_locations and not src.get('conditions',{}).get('frozen')})
             if missing and places:
                 raise InfeasiblePlan('Target cannot be crafted: the selected areas cannot supply enough '+', '.join(items[r]['name'] for r in missing)+
-                                     '. Enable the required areas in Available areas: '+', '.join(places)+'.')
+                                     '. Enable '+', '.join(places)+' in Settings, or provide the missing items from inventory.', shortfalls)
             raise InfeasiblePlan('Target cannot be crafted from the selected exploration drops, inventory, and enabled free supplies.')
         raise ValueError('Solver did not prove optimality: ' + first.message)
     optimum = float(first.fun) if continuous else int(round(first.fun))
@@ -303,7 +339,7 @@ def ranked_plans(catalog, target, quantity=1, areas=None, exclude_areas=None,
             try:
                 result = baseline if scope == frozenset(candidates) else plan(
                     catalog, target, quantity, sorted(scope), None, inventory,
-                    iron_depot, runecube, resource_saver=resource_saver)
+                    iron_depot, runecube, resource_saver=resource_saver, suggest_inventory=False)
                 results.append(result)
                 used = {a['location_id'] for a in result['areas'] if a['explores'] > 0}
                 queue.extend(scope - {area} for area in sorted(used))
@@ -316,7 +352,7 @@ def ranked_plans(catalog, target, quantity=1, areas=None, exclude_areas=None,
             for subset in combinations(candidates, size):
                 try:
                     result = plan(catalog, target, quantity, list(subset), None, inventory,
-                                  iron_depot, runecube, require_all_areas=combinations_mode, resource_saver=resource_saver)
+                                  iron_depot, runecube, require_all_areas=combinations_mode, resource_saver=resource_saver, suggest_inventory=False)
                     results.append(result)
                 except InfeasiblePlan:
                     infeasible += 1

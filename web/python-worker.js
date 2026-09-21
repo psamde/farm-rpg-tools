@@ -12,8 +12,15 @@ async function initialize(){
  py.globals.set('catalog_json',JSON.stringify((await response.json()).catalog));
  py.globals.set('highs_solve',(lp,opts)=>JSON.stringify(experiments.solve(lp,JSON.parse(opts))));
  py.runPython('from wasm_solver import install\ninstall(highs_solve)');
- py.runPython('import json, sys\nsys.path.insert(0, "/home/pyodide")\nfrom browser_engine import compute, automatic_compute, guided_compute\ncatalog = json.loads(catalog_json)');
+ py.runPython('import json, sys\nsys.path.insert(0, "/home/pyodide")\nfrom browser_engine import compute, automatic_compute, guided_compute\nfrom planner import calculation_error\ncatalog = json.loads(catalog_json)');
  return py;
+}
+function runCalculation(py,code){
+ // Ordinary planning errors carry recovery options and keep Python warm.
+ py.runPython('calculation_failure = None\ntry:\n'+code.split('\n').map(line=>'    '+line).join('\n')+'\nexcept ValueError as exc:\n    calculation_failure = calculation_error(exc)');
+ const failure=JSON.parse(py.runPython('json.dumps(calculation_failure, allow_nan=False)'));
+ if(failure)self.postMessage(failure);
+ return !failure;
 }
 self.onmessage=async({data})=>{try{
  self.postMessage({status:'running',message:runtime?'Preparing calculation…':'Loading Python and SciPy in your browser…'});
@@ -23,18 +30,19 @@ self.onmessage=async({data})=>{try{
  if(data.action==='automatic'||data.action==='guided'){
   py.globals.set('automatic_progress',message=>self.postMessage({status:'running',message}));
   const method=data.action==='guided'?'guided_compute':'automatic_compute';
-  const result=JSON.parse(py.runPython('json.dumps('+method+'(catalog, json.loads(payload_json), automatic_progress), allow_nan=False)'));
+  if(!runCalculation(py,'action_result = '+method+'(catalog, json.loads(payload_json), automatic_progress)'))return;
+  const result=JSON.parse(py.runPython('json.dumps(action_result, allow_nan=False)'));
   self.postMessage({status:'complete',result});return;
  }
  let comparing=false;
  py.globals.set('report_progress',(done,total)=>{if(!comparing)self.postMessage({status:'running',done,total,message:'Calculating on your device...'});});
- py.runPython('deferred = []\nplan_result = compute(catalog, json.loads(payload_json), report_progress, deferred)');
+ if(!runCalculation(py,'deferred = []\nplan_result = compute(catalog, json.loads(payload_json), report_progress, deferred)'))return;
  const snapshot=()=>{const result=JSON.parse(py.runPython('json.dumps(plan_result, allow_nan=False)'));result.performance.solver=experiments.stats();return result;};
  self.postMessage({status:'comparisons',result:snapshot()});
  // Suppress primary progress messages while optional comparisons run.
  comparing=true;
  while(py.runPython('len(deferred)')){
-  py.runPython('deferred.pop(0)()');
+  if(!runCalculation(py,'deferred.pop(0)()'))return;
   self.postMessage({status:'comparisons',result:snapshot()});
  }
  self.postMessage({status:'complete',result:snapshot()});

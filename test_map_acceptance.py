@@ -7,6 +7,7 @@ import unittest
 
 from browser_engine import compute, guided_compute
 from secondary import consume_leftovers
+from planner import plan, InfeasiblePlan, calculation_error
 
 
 class MapAcceptanceTests(unittest.TestCase):
@@ -23,6 +24,45 @@ class MapAcceptanceTests(unittest.TestCase):
 
     def goal(self, name, **kw):
         return dict(item_id=self.ids[name], cap=None, consumer_mode='available', allow_exploration=False, **kw)
+
+    def test_water_lily_inventory_recovery(self):
+        payload = dict(self.payload, targets={self.ids['Water Lily']: 27501, self.ids['Ant Apple']: 125},
+                       inventory={self.ids['Water Lily']: 500}, secondary=[])
+        with self.assertRaises(InfeasiblePlan) as caught:
+            compute(self.catalog, payload)
+        failure = calculation_error(caught.exception)
+        self.assertEqual(failure['inventory_shortfalls'], [dict(item_id=self.ids['Water Lily'],
+            name='Water Lily', quantity=27001, starting_inventory=500)])
+        payload['inventory'][self.ids['Water Lily']] += failure['inventory_shortfalls'][0]['quantity']
+        result = compute(self.catalog, payload)['plans'][0]
+        lily = next(b for b in result['item_balances'] if b['name'] == 'Water Lily')
+        self.assertEqual(lily['reserved_target_output'], 27501)
+        self.assertEqual(lily['expected_exploration_drops'], 0)
+        self.conserve(result)
+
+    def test_large_quest_inventory_recovery(self):
+        # The user's 66-target plan: Water Lily is unavailable in enabled zones.
+        targets = {'62':6000,'96':60001,'112':5001,'125':60001,'146':60001,'172':51002,
+            '175':2201,'176':66001,'195':60001,'214':33001,'224':4001,'240':30001,
+            '243':22001,'252':30001,'261':617,'265':24001,'281':18001,'282':54001,
+            '285':60001,'286':72001,'287':48001,'305':15400,'316':60001,'320':36001,
+            '321':36001,'323':251,'332':2501,'337':2001,'338':8401,'341':5001,
+            '376':32001,'378':27501,'389':4501,'393':15001,'474':15001,'492':72001,
+            '538':5001,'539':30001,'540':30001,'585':60001,'611':30001,'628':10001,
+            '629':15351,'632':163,'660':15001,'675':66001,'677':60001,'683':30001,
+            '685':5600,'717':12001,'725':60001,'736':15001,'743':20001,'754':37001,
+            '759':20001,'760':5001,'774':10001,'776':551,'788':72001,'800':721,
+            '825':7201,'837':72001,'841':72001,'843':48001,'844':72001,'846':18001}
+        opts = dict(areas=['explore:'+str(i) for i in [4,8,7,1,3,2,5,9,10,6,13]],
+                    iron_depot=True, runecube=True, resource_saver=45)
+        with self.assertRaises(InfeasiblePlan) as caught:
+            plan(self.catalog, targets, **opts)
+        self.assertEqual(caught.exception.inventory_shortfalls,
+                         [dict(item_id='378', name='Water Lily', quantity=27501, starting_inventory=0)])
+        result = plan(self.catalog, targets, inventory={'378':27501}, **opts)
+        self.assertEqual(len(result['targets']), 66)
+        self.assertNotIn('explore:22', [a['location_id'] for a in result['areas']])
+        self.conserve(result)
 
     def goals(self, diaries=None):
         return [self.goal(name) for name in [*self.parchments, *(diaries or self.diaries)]]
