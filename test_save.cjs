@@ -63,7 +63,7 @@ console.log('Automatic batches retain their selected exploration aim in saves');
 // paused material must not permanently erase limits or fixed consumer goals.
 c.items.fixedCraft={craftable:true,direct_ingredients:{raw:2},output_quantity:1};
 c.items.uncappedCraft={craftable:true,direct_ingredients:{raw:3},output_quantity:1};
-const mapSave={...input,map_planning:true,map_sources:{raw:['area']},map_node_usage:{raw:{mode:'void'}},map_voided:['raw'],
+const mapSave={...input,map_planning:true,map_sources:{raw:['area']},map_source_explores:{raw:{area:1234}},map_node_usage:{raw:{mode:'void'}},map_voided:['raw'],
  secondary:[
   {item_id:'craft',consumer_mode:'available',cap:2500,user_cap:true,allow_exploration:false,available_only:true},
   {item_id:'fixedCraft',consumer_mode:'fixed',cap:400,user_cap:false,allow_exploration:false,automatic_batch:true},
@@ -87,3 +87,7 @@ vm.runInContext("state.map_node_usage.raw={mode:'use'};",intentContext);
 const resumed=JSON.parse(vm.runInContext('JSON.stringify(mapRequestGoals())',intentContext));
 assert.deepEqual(resumed.map(g=>[g.consumer_mode,g.cap,g.user_cap]),[['available',2500,true],['fixed',400,false],['available',null,false]]);
 console.log('Map source selections, paused nodes, fixed goals, explicit soft limits, and uncapped consumers survive save/load and reversible resume');
+
+assert.equal(restoredMap.map_source_explores.raw.area,1234);
+assert.equal(oldMap.map_source_explores,null);
+assert.throws(()=>c.decodePlanCode(c.encodePlanCode({...mapSave,map_source_explores:{raw:{area:-1}}})));

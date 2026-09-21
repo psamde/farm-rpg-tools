@@ -141,7 +141,7 @@ console.log('Exploration drop nodes are protected from deletion independently of
 
 assert.equal(require('./web/craft-map-model.js').craftMapNodeLabels({kind:'item',explorationSupplied:true},[],[]).requirement,'EXPLORE OUTPUT NODE');
 
-const missingFarm=laneLayoutCraftMap([...ns,{id:'straw',name:'Straw',kind:'item',depth:1,missing:95126,crafts:0}],ls,{crop:{farm_produced:true},straw:{farm_produced:true}},['a','b']);
+const missingFarm=laneLayoutCraftMap([...ns,{id:'straw',name:'Straw',kind:'item',depth:1,missing:95126,crafts:0}],ls,{crop:{farm_produced:true},straw:{farm_produced:false,explorable:true}},['a','b']);
 assert.equal(missingFarm.assignments.straw,'disconnected');
 assert.ok(missingFarm.positions.straw.y<missingFarm.positions.crop.y);
 assert.ok(missingFarm.positions.straw.y<missingFarm.positions.exclusive.y);
@@ -186,4 +186,52 @@ const {craftMapDemandAllocation}=require('./web/craft-map-model.js');
  assert.equal(laneLayoutCraftMap([straw],[],meta).assignments.straw,'disconnected');
  const forest={id:'area:forest',location:'forest',kind:'area',name:'Forest',depth:0};
  assert.equal(laneLayoutCraftMap([straw,forest],[{from:forest.id,to:'straw'}],meta).assignments.straw,forest.id);
+}
+
+// Real external ingredients stay in their source lanes for soft and forced crafts.
+{
+ const metadata=JSON.parse(fs.readFileSync('web/catalog.json','utf8')).metadata;
+ const enriched=Object.fromEntries(metadata.items.map(i=>[i.id,i]));
+ const {craftMapInventoryNeed}=require('./web/craft-map-model.js');
+ for(const soft of [true,false]){
+  const g=buildCraftMap(enriched,{areas:[],item_balances:[]},{targets:{},secondary:[]},
+   ['Corn Oil','Engine'].map(name=>({item_id:id(name),cap:soft?null:100,consumer_mode:soft?'available':'fixed'})));
+  const layout=laneLayoutCraftMap(g.nodes,g.links,enriched);
+  for(const [name,lane] of [['Corn','farming'],['Small Screw','other'],['Small Spring','other'],['Straw','disconnected']]){
+   assert.equal(layout.assignments[id(name)],lane,`${name} must use its actual source category`);
+  }
+  const corn=g.nodes.find(n=>n.id===id('Corn'));
+  assert.equal(corn.externalSource,'farming');
+  assert.equal(craftMapInventoryNeed({...corn,missing:0,potentialMissing:80.2,draftCrafts:0},enriched[corn.id]),81);
+  assert.equal(craftMapInventoryNeed({...corn,free:true},enriched[corn.id]),0);
+ }
+ console.log('Corn Oil and Engine external ingredients retain source lanes, with inventory controls for potential demand.');
+}
+
+// A zero-output craft names external blockers, unless supplied intermediates bypass them.
+{
+ const {craftMapMissingInputs}=require('./web/craft-map-model.js');
+ const metadata=JSON.parse(fs.readFileSync('web/catalog.json','utf8')).metadata;
+ const enriched=Object.fromEntries(metadata.items.map(i=>[i.id,i]));
+ const graph=buildCraftMap(enriched,{areas:[],item_balances:[]},{targets:{},inventory:JSON.stringify(Object.fromEntries(['Small Gear','Small Screw','Small Spring'].map(n=>[id(n),0]))),secondary:[{item_id:id('Engine'),cap:null,consumer_mode:'available'}]});
+ for(const n of graph.nodes)if(!enriched[n.id]?.craftable&&enriched[n.id]?.explorable&&n.id!==id('Pocket Watch'))n.totalSupply=1000;
+ const missing=()=>craftMapMissingInputs(enriched,graph.nodes,id('Engine')).map(r=>items[r].name);
+ assert.deepEqual(missing(),['Pocket Watch','Small Gear','Small Screw','Small Spring']);
+ graph.nodes.find(n=>n.id===id('Pocket Watch')).totalSupply=100;
+ for(const name of ['Small Screw','Small Spring'])graph.nodes.find(n=>n.id===id(name)).totalSupply=100;
+ assert.deepEqual(missing(),['Small Gear']);
+ // Flywheel is already supplied, so its missing upstream Small Gear is irrelevant.
+ graph.nodes.find(n=>n.id===id('Flywheel')).stock=1;
+ assert.deepEqual(missing(),[]);
+ console.log('Engine identifies unsupplied external ingredients and respects supplied intermediates.');
+}
+
+{
+ const {craftMapAutoSupplied}=require('./web/craft-map-model.js');
+ const corn={id:'corn',craftable:false,explorable:false,farm_produced:true};
+ assert.equal(craftMapAutoSupplied(corn,{}),true);
+ assert.equal(craftMapAutoSupplied(corn,{inventory:'{"corn":0}'}),false);
+ assert.equal(craftMapAutoSupplied({...corn,explorable:true},{}),false);
+ assert.equal(craftMapUsage({kind:'item',autoSupply:true,stock:0,totalSupply:0}),'fulfilled');
+ console.log('Automatic external supplies are provided by default; explicit zero and exploration sources remain distinct.');
 }

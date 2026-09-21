@@ -42,6 +42,136 @@ class MapAcceptanceTests(unittest.TestCase):
             self.assertGreaterEqual(b['expected_final_inventory'] + 1e-6, b['reserved_target_output'])
         self.assertEqual(sum(a['explores'] for a in result['areas']), result['optimal_total_explores'])
 
+    def test_jundland_source_connects_before_all_other_gaps_are_filled(self):
+        payload = dict(self.payload, targets={self.ids['Langstaff Crest']: 163},
+                       areas=['explore:13', 'explore:8', 'explore:9', 'explore:6'])
+        primary = compute(self.catalog, dict(payload, secondary=[]))['plans'][0]
+        goals = [self.goal('Spool of Copper'), self.goal('Energy Coil')]
+        source = {self.ids['Coal']: ['explore:8']}
+        result = consume_leftovers(self.catalog, primary, goals, areas=payload['areas'],
+                                  map_planning=True, map_sources=source)
+        self.assertGreater(next(a['explores'] for a in result['areas'] if a['location_id'] == 'explore:8'), 0)
+        balances = {b['name']: b for b in result['item_balances']}
+        self.assertGreater(balances['Coal']['expected_exploration_drops'], 40000)
+        self.assertGreater(self.counts(result)['Spool of Copper'], 0)
+        self.assertEqual(self.counts(result)['Energy Coil'], 0)  # Emberstone still missing.
+        missing = {r['item_id'] for r in result['map_potential']['missing']}
+        self.assertNotIn(self.ids['Coal'], missing)
+        self.assertIn(self.ids['Emberstone'], missing)
+        self.conserve(result)
+        restored = consume_leftovers(self.catalog, primary, goals, areas=payload['areas'],
+                                     map_planning=True, map_sources={})
+        self.assertEqual(restored['optimal_total_explores'], primary['optimal_total_explores'])
+
+    def test_explicit_exploration_amounts_do_not_grow_with_new_use_void_crafts(self):
+        payload = dict(self.payload, targets={self.ids['Langstaff Crest']: 163},
+                       areas=['explore:13','explore:8','explore:9','explore:7','explore:1','explore:3','explore:10'])
+        primary = compute(self.catalog, dict(payload, secondary=[]))['plans'][0]
+        sources = {self.ids[r]: [a] for r,a in [('Coal','explore:8'),('Emberstone','explore:9'),
+                   ('Mushroom','explore:7'),('Bone','explore:1'),('Purple Flower','explore:3'),('Blue Gel','explore:10')]}
+        amounts = {self.ids[r]: {a:q} for r,a,q in [('Coal','explore:8',920000),('Emberstone','explore:9',3100000),
+                   ('Mushroom','explore:7',650000),('Bone','explore:1',115000),('Purple Flower','explore:3',100000),('Blue Gel','explore:10',100000)]}
+        goals=[self.goal(n) for n in ['Spool of Copper','Energy Coil','Spiky Bracelet','Machine Press','Belt Drive','Pear Grease','Hourglass']]
+        results=[]
+        for count in [2,3,4,5,6,7]:
+            result=consume_leftovers(self.catalog,primary,goals[:count],areas=payload['areas'],
+                                    map_planning=True,map_sources=sources,map_source_explores=amounts)
+            self.assertEqual(result['secondary']['additional_explores'],sum(sum(a.values()) for a in amounts.values()))
+            self.conserve(result)
+            results.append(result)
+        final=results[-1]
+        self.assertTrue(all(t['crafts']>0 for t in final['secondary']['targets']),self.counts(final))
+        for row in final['secondary']['targets']:
+            self.assertGreater(row['crafts']/max(1,row['if_first']), .2, row['name'])
+        outputs={s['item_id'] for s in self.catalog['sources'].values() if s.get('location_id')=='explore:13' and s['kind']=='explore'}
+        usable={r for r in outputs if any(r in i['direct_ingredients'] for i in self.catalog['items'].values())}
+        self.assertEqual(len(usable),12)
+        balances={b['item_id']:b for b in final['item_balances']}
+        for ref in usable:self.assertGreater(balances[ref]['used_by_leftover_craft'],0,self.catalog['items'][ref]['name'])
+        complete=dict(payload,secondary=goals,map_sources=sources,map_source_explores=amounts)
+        restored=compute(self.catalog,json.loads(json.dumps(complete)))['plans'][0]
+        self.assertEqual(self.counts(restored),self.counts(final))
+        preview=guided_compute(self.catalog,dict(complete,secondary=goals[:-1],replacement_goals=goals))['preview_plan']
+        self.assertEqual(self.counts(preview),self.counts(final))
+        self.assertEqual(preview['optimal_total_explores'],final['optimal_total_explores'])
+
+    def test_blocked_external_craft_keeps_usable_selected_inputs_balanced(self):
+        payload = dict(self.payload, targets={self.ids['Langstaff Crest']: 163},
+                       areas=['explore:13','explore:8','explore:9','explore:7','explore:1','explore:3','explore:10'],inventory={self.ids['Corn']:0})
+        primary = compute(self.catalog, dict(payload, secondary=[]))['plans'][0]
+        routes = [('Coal','explore:8',511980),('Emberstone','explore:9',3089731),
+                  ('Mushroom','explore:7',590652),('Bone','explore:1',110791),
+                  ('Purple Flower','explore:3',9941462),('Blue Gel','explore:10',3231339)]
+        sources = {self.ids[r]:[a] for r,a,_ in routes}
+        amounts = {self.ids[r]:{a:q} for r,a,q in routes}
+        goals = [self.goal(n) for n in ['Spool of Copper','Energy Coil','Spiky Bracelet',
+                                       'Machine Press','Belt Drive','Pear Grease','Hourglass']]
+        def run(selected, base=primary):
+            result = consume_leftovers(self.catalog, base, selected, areas=payload['areas'],
+                map_planning=True, map_sources=sources, map_source_explores=amounts)
+            self.conserve(result)
+            self.assertEqual(result['secondary']['additional_explores'],sum(q for _,_,q in routes))
+            return result
+        before = run(goals)
+        extended = [*goals,self.goal('Corn Oil'),self.goal('Engine',user_cap=True)]
+        extended[-1]['cap'] = 0  # Engine paused by a user-selected Void/Sell input.
+        blocked = run(extended)
+        self.assertEqual(self.counts(blocked)['Corn Oil'],0)
+        self.assertGreater(self.counts(blocked)['Machine Press'],1000)
+        for name,q in self.counts(before).items():
+            self.assertAlmostEqual(self.counts(blocked)[name],q,delta=10,msg=name)
+        # Supplying Corn enables its consumer without changing exploration.
+        supplied = compute(self.catalog,dict(payload,secondary=[],inventory={self.ids['Corn']:10000}))['plans'][0]
+        resumed = run(extended,supplied)
+        self.assertGreater(self.counts(resumed)['Corn Oil'],0)
+
+        # Resuming Power Monitor alone cannot invent external inputs or Pocket Watch.
+        enabled = [*goals,self.goal('Engine')]
+        inventory = {self.ids[name]:1000 for name in ['Small Screw','Small Spring','Small Gear']}
+        supplied = compute(self.catalog,dict(payload,secondary=[],inventory=inventory))['plans'][0]
+        self.assertEqual(self.counts(run(enabled,supplied))['Engine'],0)
+        inventory[self.ids['Pocket Watch']] = 1000
+        supplied = compute(self.catalog,dict(payload,secondary=[],inventory=inventory))['plans'][0]
+        self.assertGreater(self.counts(run(enabled,supplied))['Engine'],0)
+
+    def test_map_external_supplies_default_auto_and_manual_amounts_override(self):
+        payload = dict(self.payload, targets={self.ids['Langstaff Crest']:163},
+                       areas=['explore:13','explore:8','explore:9','explore:7','explore:1','explore:3','explore:10'])
+        routes=[('Coal','explore:8',511980),('Emberstone','explore:9',3089731),
+                ('Mushroom','explore:7',590652),('Bone','explore:1',110791),
+                ('Purple Flower','explore:3',9941462),('Blue Gel','explore:10',3231339)]
+        payload.update(map_sources={self.ids[r]:[a] for r,a,_ in routes},
+            map_source_explores={self.ids[r]:{a:q} for r,a,q in routes},
+            secondary=[self.goal(n) for n in ['Machine Press','Corn Oil','Engine']])
+        def run(inventory):
+            result=compute(self.catalog,dict(payload,inventory=inventory))['plans'][0]
+            self.conserve(result)
+            self.assertEqual(result['secondary']['additional_explores'],sum(q for _,_,q in routes))
+            return result
+        watch={self.ids['Pocket Watch']:1000}
+        auto=run(watch)
+        self.assertGreater(self.counts(auto)['Corn Oil'],0)
+        self.assertGreater(self.counts(auto)['Engine'],0)
+        for name in ['Corn','Small Screw','Small Spring','Small Gear']:
+            b=next(b for b in auto['item_balances'] if b['name']==name)
+            self.assertEqual(b['starting_inventory'],b['auto_starting_inventory'])
+            self.assertGreater(b['auto_starting_inventory'],0)
+            self.assertLess(b['expected_final_inventory'],1)
+            self.assertNotIn(b['item_id'],{r['item_id'] for r in auto['map_potential']['missing']})
+        no_watch=run({})
+        self.assertEqual(self.counts(no_watch)['Engine'],0,'explorable ingredients must not be auto-provided')
+        stopped=run(dict(watch,**{self.ids['Small Gear']:0,self.ids['Corn']:0}))
+        self.assertEqual(self.counts(stopped)['Engine'],0)
+        self.assertEqual(self.counts(stopped)['Corn Oil'],0)
+        limited=run(dict(watch,**{self.ids['Corn']:80}))
+        corn=next(b for b in limited['item_balances'] if b['name']=='Corn')
+        self.assertEqual(corn['starting_inventory'],80)
+        self.assertEqual(corn.get('auto_starting_inventory',0),0)
+        self.assertLessEqual(corn['consumed_by_crafting'],80)
+        self.assertGreater(self.counts(limited)['Corn Oil'],0)
+        preview=guided_compute(self.catalog,dict(payload,inventory=watch,replacement_goals=payload['secondary']))['preview_plan']
+        self.assertEqual(self.counts(preview),self.counts(auto))
+
     def test_all_six_diary_orders_have_the_same_balanced_result(self):
         expected = None
         for permutation in itertools.permutations(self.diaries):
@@ -131,7 +261,8 @@ class MapAcceptanceTests(unittest.TestCase):
         self.assertTrue(next(t for t in result['secondary']['targets'] if t['name'] == 'Leather Diary')['user_cap'])
 
     def test_missing_unavailable_recipe_does_not_zero_other_soft_goals(self):
-        goals = [*self.goals(), self.goal('Chum')]
+        goals = [*self.goals(), self.goal('Chum',user_cap=True)]
+        goals[-1]['cap'] = 0  # Explicitly paused, rather than absent farm supplies.
         result = self.run_map(goals)
         self.assertEqual(self.counts(result)['Chum'], 0)
         self.assertTrue(all(self.counts(result)[name] > 80000 for name in self.diaries))

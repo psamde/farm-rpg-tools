@@ -51,11 +51,11 @@ def validate_secondary(catalog, rows):
     return result
 
 
-def consume_leftovers(catalog, primary, requested, areas=None, max_areas=15, progress=None, defer_comparison=None, *, map_planning=False, map_sources=None):
+def consume_leftovers(catalog, primary, requested, areas=None, max_areas=15, progress=None, defer_comparison=None, *, map_planning=False, map_sources=None, map_source_explores=None):
     from balanced import consume
     goals = validate_secondary(catalog, requested)
     if not goals: return primary
-    return consume(catalog,primary,goals,areas,max_areas,progress,map_planning=map_planning,map_sources=map_sources)
+    return consume(catalog,primary,goals,areas,max_areas,progress,map_planning=map_planning,map_sources=map_sources,map_source_explores=map_source_explores)
 
 
 def _consume_priority_legacy(catalog, primary, requested, areas=None, max_areas=15, progress=None, defer_comparison=None):

@@ -1,0 +1,125 @@
+{
+  "targets": {
+    "632": 163
+  },
+  "areas": [
+    "explore:4",
+    "explore:8",
+    "explore:7",
+    "explore:1",
+    "explore:3",
+    "explore:2",
+    "explore:5",
+    "explore:9",
+    "explore:10",
+    "explore:6",
+    "explore:13"
+  ],
+  "iron_depot": true,
+  "runecube": true,
+  "resource_saver": 45,
+  "map_planning": true,
+  "map_sources": {
+    "103": [
+      "explore:8"
+    ],
+    "178": [
+      "explore:9"
+    ],
+    "43": [
+      "explore:7"
+    ],
+    "113": [
+      "explore:1"
+    ],
+    "53": [
+      "explore:3"
+    ],
+    "314": [
+      "explore:10"
+    ]
+  },
+  "map_source_explores": {
+    "43": {
+      "explore:7": 590652
+    },
+    "53": {
+      "explore:3": 9941462
+    },
+    "103": {
+      "explore:8": 511980
+    },
+    "113": {
+      "explore:1": 110791
+    },
+    "178": {
+      "explore:9": 3089731
+    },
+    "314": {
+      "explore:10": 3231339
+    }
+  },
+  "secondary": [
+    {
+      "item_id": "679",
+      "cap": null,
+      "consumer_mode": "available",
+      "allow_exploration": false
+    },
+    {
+      "item_id": "680",
+      "cap": null,
+      "consumer_mode": "available",
+      "allow_exploration": false
+    },
+    {
+      "item_id": "1334",
+      "cap": null,
+      "consumer_mode": "available",
+      "allow_exploration": false
+    },
+    {
+      "item_id": "628",
+      "cap": null,
+      "consumer_mode": "available",
+      "allow_exploration": false
+    },
+    {
+      "item_id": "677",
+      "cap": null,
+      "consumer_mode": "available",
+      "allow_exploration": false
+    },
+    {
+      "item_id": "683",
+      "cap": null,
+      "consumer_mode": "available",
+      "allow_exploration": false
+    },
+    {
+      "item_id": "388",
+      "cap": null,
+      "consumer_mode": "available",
+      "allow_exploration": false
+    },
+    {
+      "item_id": "629",
+      "cap": null,
+      "consumer_mode": "available",
+      "allow_exploration": false
+    },
+    {
+      "item_id": "685",
+      "cap": null,
+      "consumer_mode": "available",
+      "allow_exploration": false
+    }
+  ],
+  "inventory": {
+    "65": 758223,
+    "213": 9759,
+    "251": 29276,
+    "339": 87828,
+    "342": 9759
+  }
+}

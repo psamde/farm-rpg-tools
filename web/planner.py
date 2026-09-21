@@ -235,7 +235,7 @@ def plan(catalog, target, quantity=1, areas=None, exclude_areas=None,
         'target': targets[0], 'targets': targets,
         'target_semantics': 'Craft targets count workshop crafts; collection targets reserve the requested final inventory, after crafting. Starting inventory counts toward collection goals.',
         'model': 'minimum explores under expected-yield material balances',
-        'assumptions': {'empty_inventory_unless_supplied': True, 'iron_depot': iron_depot, 'runecube': runecube,
+        'assumptions': {'entered_inventory_ids': sorted(stock), 'empty_inventory_unless_supplied': True, 'iron_depot': iron_depot, 'runecube': runecube,
             'resource_saver': resource_saver, 'resource_saver_model': 'Expected credited output including duplicates; ingredients divided by 1 + bonus at each recipe level. No inventory-cap refunds or per-batch rounding.', 'integer_explores_and_crafts': not continuous,
             'unlimited_free_items': [{'id': i, 'name': items[i]['name']} for i in sorted(free_ids)],
             'all_selected_areas_assumed_accessible': True, 'inventory_capacity': None,
@@ -456,6 +456,6 @@ def passive_plans(catalog, inventory, areas, iron_depot=False, runecube=False, r
     allowed=[resolve(locations,i) for i in areas]
     free=[{'id':resolve(items,n),'name':n} for n in ('Iron','Nails')] if iron_depot else []
     balances=[dict(item_id=i,name=items[i]['name'],starting_inventory=q,expected_exploration_drops=0,crafted=0,free_perk_supply=0,consumed_by_crafting=0,reserved_target_output=0,expected_final_inventory=q,expected_unused=q) for i,q in stock.items()]
-    assumptions=dict(iron_depot=iron_depot,runecube=runecube,resource_saver=resource_saver,unlimited_free_items=free,integer_explores_and_crafts=True)
+    assumptions=dict(entered_inventory_ids=sorted(stock),iron_depot=iron_depot,runecube=runecube,resource_saver=resource_saver,unlimited_free_items=free,integer_explores_and_crafts=True)
     base=dict(plan_schema_version='3.0.0',target=None,targets=[],raw_materials_needed=[],assumptions=assumptions,allowed_areas=[dict(id=i,name=locations[i]['name']) for i in allowed],optimal_total_explores=0,continuous_lower_bound_explores=0,areas=[],crafts_in_dependency_order=[],item_balances=balances,unused_items=[b for b in balances if b['expected_unused']>0],solver=dict(name='production inventory',optimal=True),model='Consume one passive production batch',rank=1,area_set_id='no-exploration')
     return dict(options_schema_version='2.0.0',target=None,targets=[],raw_materials_needed=[],assumptions=assumptions,plans=[base],enumeration=dict(mode='passive',max_areas=max_areas,combinations_checked=0,feasible_options=1))

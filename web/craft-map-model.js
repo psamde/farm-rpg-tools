@@ -1,4 +1,36 @@
 /* Pure graph accounting. Draft quantities are aims; the solver confirms outcomes. */
+// Distinguish an unselected exploration source from an ingredient that cannot
+// be explored for at all. Farm classification is crops only, not every passive item.
+function craftMapExternalSource(item){
+ if(item?.farm_produced||item?.type==='crop')return 'farming';
+ if(item?.craftable===false&&item.explorable===false)return 'other';
+ return null;
+}
+function craftMapAutoSupplied(item,settings){
+ if(!craftMapExternalSource(item)||item?.explorable)return false;
+ const inventory=JSON.parse((settings.planner_mode==='passive'?settings.passive_inventory:settings.inventory)||'{}');
+ return !Object.hasOwn(inventory,item.id);
+}
+function craftMapInventoryNeed(node,item){
+ if(node.free)return 0;
+ const shortage=Math.max(node.missing||0,node.potentialMissing||0,
+  !node.draft?(node.draftCrafts||0)*(item?.output_quantity||1):0);
+ return shortage>0?Math.ceil(shortage):craftMapExternalSource(item)?1:0;
+}
+// Explain zero-output recipes without treating unsupplied ingredients
+// as free. An intermediate already in stock can satisfy its branch directly.
+function craftMapMissingInputs(items,nodes,itemId){
+ const byId=new Map(nodes.map(n=>[n.id,n])),seen=new Set(),missing=[];
+ function visit(id){
+  if(seen.has(id))return;seen.add(id);
+  const item=items[id],node=byId.get(id);
+  if(!item||node?.free||node?.autoSupply||(id!==itemId&&(node?.stock||0)>1e-8))return;
+  if(item.craftable){for(const child of Object.keys(item.direct_ingredients||{}))visit(child);}
+  else if(node&&!(node.totalSupply>0))missing.push(id);
+ }
+ visit(itemId);
+ return missing.sort((a,b)=>items[a].name.localeCompare(items[b].name));
+}
 function craftMapIsSoft(goal){
  if(goal.consumer_mode==='fixed')return false;
  return goal.consumer_mode==='available'||goal.available_only===true||goal.cap===null;
@@ -23,7 +55,7 @@ function buildCraftMap(items,plan,settings,drafts=[],expanded=[]){
  for(const g of drafts)draftCrafts[g.item_id]=craftMapDraftQuantity(g);
  // All parent demands accumulate before a shared ingredient is evaluated.
  for(const id of [...order].reverse()){
-  if(free(id))continue;
+  if(free(id)||craftMapAutoSupplied(items[id],settings))continue;
   const stock=available(balances[id]),short=Math.max(0,(demand[id]||0)-stock);
   if(items[id].craftable){
    const crafts=Math.max(draftCrafts[id]||0,Math.ceil(short/items[id].output_quantity-1e-8));
@@ -52,7 +84,7 @@ function buildCraftMap(items,plan,settings,drafts=[],expanded=[]){
  for(const area of plan.areas)if((settings.map_expanded_areas||[]).includes(area.location_id))
   for(const output of area.items)if(output.expected_drops>0&&spareIds.has(output.item_id))seen.add(output.item_id);
  expanded.forEach(id=>{if(items[id])seen.add(id);});
- for(const id of seen){const b=balances[id]||{};nodes.set(id,{id,kind:'item',name:items[id].name,primary:Object.hasOwn(settings.targets||{},id),secondary:(settings.secondary||[]).some(g=>g.item_id===id),draft:drafts.some(g=>g.item_id===id),soft:[...drafts,...(settings.secondary||[])].some(g=>g.item_id===id&&craftMapIsSoft(g)),missing:missing[id]||0,need:demand[id]||0,crafts:(b.crafted||0)/items[id].output_quantity+(draftCrafts[id]||0),draftCrafts:draftCrafts[id]||0,stock:Math.max(0,available(b)+(draftCrafts[id]||0)*items[id].output_quantity-(demand[id]||0)),fromInventory:(b.starting_inventory||0)>0,currentStock:available(b),totalSupply:Math.max(available(b),(b.starting_inventory||0)+(b.expected_exploration_drops||0)+(b.free_perk_supply||0)+(b.crafted||0))+(draftCrafts[id]||0)*items[id].output_quantity,explorationSupplied:plan.areas.some(a=>a.items.some(o=>o.item_id===id&&o.expected_drops>0)),protected:protectedIds.has(id),voided:(settings.map_voided||[]).includes(id),useVoid:(settings.map_use_void||[]).includes(id),free:free(id),depth:1});}
+ for(const id of seen){const b=balances[id]||{};nodes.set(id,{id,kind:'item',name:items[id].name,externalSource:craftMapExternalSource(items[id]),autoSupply:craftMapAutoSupplied(items[id],settings),automaticAmount:b.auto_starting_inventory||0,primary:Object.hasOwn(settings.targets||{},id),secondary:(settings.secondary||[]).some(g=>g.item_id===id),draft:drafts.some(g=>g.item_id===id),soft:[...drafts,...(settings.secondary||[])].some(g=>g.item_id===id&&craftMapIsSoft(g)),missing:missing[id]||0,need:demand[id]||0,crafts:(b.crafted||0)/items[id].output_quantity+(draftCrafts[id]||0),draftCrafts:draftCrafts[id]||0,stock:Math.max(0,available(b)+(draftCrafts[id]||0)*items[id].output_quantity-(demand[id]||0)),fromInventory:(b.starting_inventory||0)>0,currentStock:available(b),totalSupply:Math.max(available(b),(b.starting_inventory||0)+(b.expected_exploration_drops||0)+(b.free_perk_supply||0)+(b.crafted||0))+(draftCrafts[id]||0)*items[id].output_quantity,explorationSupplied:plan.areas.some(a=>a.items.some(o=>o.item_id===id&&o.expected_drops>0)),protected:protectedIds.has(id),voided:(settings.map_voided||[]).includes(id),useVoid:(settings.map_use_void||[]).includes(id),free:free(id),depth:1});}
  const blockedMemo=new Map();
  function blocked(id,threshold=1e-8){const key=id+':'+threshold;if(blockedMemo.has(key))return blockedMemo.get(key);const value=!free(id)&&Boolean((missing[id]||0)>=threshold||crafted(id)>1e-8&&Object.keys(items[id].direct_ingredients).some(child=>blocked(child,threshold)));blockedMemo.set(key,value);return value;}
  for(const node of nodes.values()){node.blocked=blocked(node.id);node.warningBlocked=blocked(node.id,10);}
@@ -60,7 +92,7 @@ function buildCraftMap(items,plan,settings,drafts=[],expanded=[]){
  for(const id of order){const node=nodes.get(id);if(!node||free(id))continue;for(const [child,q] of Object.entries(items[id].direct_ingredients)){if(node.crafts>0||inactiveRecipes.has(id)){link(child,id,node.crafts*q*factor,Boolean(node.draftCrafts)||inactiveRecipes.has(id));node.depth=Math.max(node.depth,(nodes.get(child)?.depth||1)+1);}}}
  const sources=[];
  for(const area of plan.areas){const id='area:'+area.location_id;nodes.set(id,{id,location:area.location_id,kind:'area',name:area.name,explores:area.explores,depth:0,outputs:area.items.filter(i=>i.expected_drops>0)});sources.push(id);for(const output of area.items)if(nodes.has(output.item_id)&&output.expected_drops>0)link(id,output.item_id,output.expected_drops);}
- const supplied=[...nodes.values()].filter(n=>n.kind==='item'&&(balances[n.id]?.starting_inventory>0||n.free));
+ const supplied=[...nodes.values()].filter(n=>n.kind==='item'&&(balances[n.id]?.starting_inventory>0||n.free||n.autoSupply));
  if(supplied.length){nodes.set('inventory',{id:'inventory',kind:'inventory',name:settings.planner_mode==='passive'?'Passive production':'Starting supplies',depth:0});for(const n of supplied)link('inventory',n.id,balances[n.id]?.starting_inventory||0);}
  const maxDepth=Math.max(2,...[...nodes.values()].map(n=>n.depth));
  for(const n of nodes.values())if(n.primary)n.depth=maxDepth+1;
@@ -81,7 +113,7 @@ function layoutCraftMap(nodes,previous={}){
  }}
  return positions;
 }
-if(typeof module!=='undefined')module.exports={buildCraftMap,towerOpportunity,layoutCraftMap};
+if(typeof module!=='undefined')module.exports={buildCraftMap,towerOpportunity,layoutCraftMap,craftMapExternalSource,craftMapInventoryNeed,craftMapMissingInputs,craftMapAutoSupplied};
 
 // Source lanes describe this route's contributions, not all potential catalog drops.
 function laneLayoutCraftMap(nodes,links,items,areaOrder=[]){
@@ -97,6 +129,7 @@ function laneLayoutCraftMap(nodes,links,items,areaOrder=[]){
   const sourceIds=[...new Set((incoming.get(n.id)||[]).filter(id=>byId.get(id)?.kind==='area'))];
   if(n.kind==='area')assigned.set(n.id,laneIndex.get(n.id));
   else if(sourceIds.length)assigned.set(n.id,sourceIds.length>1?laneIndex.get('shared'):laneIndex.get(sourceIds[0]));
+  else if(n.kind==='item'&&n.depth<=1&&craftMapExternalSource(items[n.id]))assigned.set(n.id,laneIndex.get(craftMapExternalSource(items[n.id])));
   else if(n.kind==='item'&&n.depth<=1&&!n.free&&(n.missing>=10||!(incoming.get(n.id)||[]).length&&!items[n.id]?.farm_produced&&items[n.id]?.type!=='crop'))assigned.set(n.id,laneIndex.get('disconnected'));
   else if(n.kind==='inventory')assigned.set(n.id,laneIndex.get('other'));
   else if(!n.crafts||n.free)assigned.set(n.id,laneIndex.get(items[n.id]?.farm_produced||items[n.id]?.type==='crop'?'farming':'other'));
@@ -140,6 +173,7 @@ if(typeof module!=='undefined')module.exports.laneLayoutCraftMap=laneLayoutCraft
 function craftMapUsage(n){
  if(n.voided||n.useVoid)return 'void';
  if(n.kind!=='item'||n.free)return '';
+ if(n.autoSupply)return 'fulfilled';
  if(n.missing>=10||n.warningBlocked)return 'pending';
  if(!n.primary&&n.totalSupply!=null&&n.totalSupply<1&&!n.explorationSupplied&&!n.fromInventory)return 'unused';
  const negligibleRemainder=n.totalSupply>0&&n.stock/n.totalSupply<0.001;
@@ -176,7 +210,7 @@ if(typeof module!=='undefined')module.exports.craftMapCandidateGaps=craftMapCand
 
 function craftMapPotentialAim(items,snapshot,settings,id,focus){
  const stock=Object.fromEntries(snapshot.item_balances.map(b=>[b.item_id,Math.max(0,b.expected_unused||0)]));
- const factor=1/(1+(settings.resource_saver||0)/100),free=ref=>settings.iron_depot&&['Iron','Nails'].includes(items[ref]?.name);
+ const factor=1/(1+(settings.resource_saver||0)/100),free=ref=>craftMapAutoSupplied(items[ref],settings)||settings.iron_depot&&['Iron','Nails'].includes(items[ref]?.name);
  function requirements(ref,q,out,stop,seen=new Set()){
   if(free(ref)||seen.has(ref))return;
   const item=items[ref];
@@ -218,7 +252,7 @@ if(typeof module!=='undefined')Object.assign(module.exports,{craftMapAddOptions,
 
 function craftMapNodeLabels(n,nodes,links){
  const required=Boolean(n.protected||n.primary||(n.kind!=='item'&&links.some(l=>l.from===n.id&&nodes.some(child=>child.id===l.to&&child.protected))));
- return {requirement:n.explorationSupplied?'EXPLORE OUTPUT NODE':required?'REQUIRED NODE':'OPTIONAL NODE',mode:n.voided?'Void/Sell':n.useVoid?'Use + Void':n.fromInventory?'FROM INVENTORY':''};
+ return {requirement:n.explorationSupplied?'EXPLORE OUTPUT NODE':required?'REQUIRED NODE':'OPTIONAL NODE',mode:n.voided?'Void/Sell':n.useVoid?'Use + Void':n.autoSupply?'AUTO SUPPLIED':n.fromInventory?'FROM INVENTORY':''};
 }
 if(typeof module!=='undefined')module.exports.craftMapNodeLabels=craftMapNodeLabels;
 
@@ -250,7 +284,7 @@ function craftMapPotential(items,plan,settings,drafts){
  }
  const graph=buildCraftMap(items,plan,settings,proposed);
  // Free perk inputs can appear in recipe links but never need a source.
- for(const node of graph.nodes)if(node.free){node.need=0;node.missing=0;}
+ for(const node of graph.nodes)if(node.free||node.autoSupply){node.need=0;node.missing=0;}
  return {goals,graph};
 }
 if(typeof module!=='undefined')module.exports.craftMapPotential=craftMapPotential;

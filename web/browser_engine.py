@@ -63,7 +63,7 @@ def compute(catalog, payload, progress=lambda done,total: None, deferred=None):
     if payload.get('secondary'):
         for i, primary in enumerate(result['plans']):
             progress(0, None)
-            result['plans'][i] = consume_leftovers(catalog, primary, payload['secondary'], areas=sorted((set(payload['automatic_areas']) & set(payload['areas']) if payload.get('automatic_areas') is not None else set(payload['areas'])) | {a['location_id'] for a in primary['areas']}), max_areas=payload.get('max_areas', 3), progress=lambda: progress(0, None), defer_comparison=deferred.append if deferred is not None else None, map_planning=payload.get("map_planning", False), map_sources=payload.get("map_sources"))
+            result['plans'][i] = consume_leftovers(catalog, primary, payload['secondary'], areas=sorted((set(payload['automatic_areas']) & set(payload['areas']) if payload.get('automatic_areas') is not None else set(payload['areas'])) | {a['location_id'] for a in primary['areas']}), max_areas=payload.get('max_areas', 3), progress=lambda: progress(0, None), defer_comparison=deferred.append if deferred is not None else None, map_planning=payload.get("map_planning", False), map_sources=payload.get("map_sources"), map_source_explores=payload.get("map_source_explores"))
     result['plans'].sort(key=lambda p: (p['optimal_total_explores'], len(p['areas'])))
     unique = {}
     for p in result['plans']:
@@ -92,11 +92,12 @@ def guided_compute(catalog, payload, progress=lambda message: None):
     primary = next((p for p in baseline['plans'] if p['area_set_id']==payload.get('selected_plan_key')), baseline['plans'][0])
     goals = payload.get('secondary', [])
     areas = sorted((set(payload.get('automatic_areas') or payload['areas']) & set(payload['areas'])) | {a['location_id'] for a in primary['areas']})
-    def allocate(gs, source_choices=None):
+    def allocate(gs, source_choices=None, source_amounts=None):
         return consume_leftovers(catalog, primary, gs, areas=areas, defer_comparison=lambda _:None,
             map_planning=payload.get("map_planning", False),
-            map_sources=payload.get("map_sources") if source_choices is None else source_choices) if gs else deepcopy(primary)
-    current = allocate(goals, payload.get('previous_map_sources'))
+            map_sources=payload.get("map_sources") if source_choices is None else source_choices,
+            map_source_explores=payload.get("map_source_explores") if source_amounts is None else source_amounts) if gs else deepcopy(primary)
+    current = allocate(goals, payload.get('previous_map_sources'), payload.get('previous_map_source_explores'))
     before = {b['item_id']:b for b in current['item_balances']}
     old_outputs = {g['item_id']:g['crafts'] for g in current.get('secondary',{}).get('targets',[])}
     if payload.get('chosen_goals') or 'replacement_goals' in payload:

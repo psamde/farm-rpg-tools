@@ -10,9 +10,9 @@ from functools import lru_cache
 import math
 
 
-def consume(catalog, primary, goals, areas=None, max_areas=15, progress=None, *, map_planning=False, map_sources=None):
+def consume(catalog, primary, goals, areas=None, max_areas=15, progress=None, *, map_planning=False, map_sources=None, map_source_explores=None):
     if map_planning:
-        return _consume_map(catalog, primary, goals, areas, progress, map_sources or {})
+        return _consume_map(catalog, primary, goals, areas, progress, map_sources or {}, map_source_explores)
     import numpy as np
     from scipy.optimize import Bounds, LinearConstraint, milp
     from planner import resolve
@@ -248,7 +248,7 @@ def consume(catalog, primary, goals, areas=None, max_areas=15, progress=None, *,
     return report(catalog,primary,goals,counts,extra_e,rates,pool,factor,free,maxima,scales,retained)
 
 
-def _consume_map(catalog, primary, goals, areas, progress, source_choices):
+def _consume_map(catalog, primary, goals, areas, progress, source_choices, source_explores=None):
     """Plan recipe selections together; current output is never a persistent cap.
 
     Potential is anchored to primary supplies. Chosen sources may fill missing
@@ -257,7 +257,7 @@ def _consume_map(catalog, primary, goals, areas, progress, source_choices):
     """
     import numpy as np
     from scipy.optimize import Bounds, LinearConstraint, milp
-    from planner import resolve
+    from planner import resolve, exploration_target_ids
 
     goals = deepcopy(goals)
     items = catalog['items']
@@ -290,6 +290,13 @@ def _consume_map(catalog, primary, goals, areas, progress, source_choices):
         ref = resolve(items, str(ref))
         if not isinstance(locations, list): raise ValueError('Invalid map sources.')
         chosen[ref] = {resolve(catalog['locations'], a) for a in locations} & enabled
+    if source_explores is not None:
+        if not isinstance(source_explores, dict): raise ValueError('Invalid source exploration amounts.')
+        for ref, amounts in source_explores.items():
+            if ref not in items or not isinstance(amounts, dict): raise ValueError('Invalid source exploration amounts.')
+            for area, count in amounts.items():
+                if area not in catalog['locations'] or type(count) is not int or not 0 <= count <= 10**12:
+                    raise ValueError('Invalid source exploration amount.')
     extra_areas = set().union(*chosen.values()) if chosen else set()
     rates = {a: Counter() for a in sorted(enabled | base_areas)}
     for source in catalog['sources'].values():
@@ -303,6 +310,11 @@ def _consume_map(catalog, primary, goals, areas, progress, source_choices):
     C = {r: i for i, r in enumerate(order)}
     E = {a: len(C) + i for i, a in enumerate(rates)}
     refs = sorted(seen - free)
+    entered = set(primary['assumptions'].get('entered_inventory_ids',
+        [b['item_id'] for b in primary['item_balances'] if b.get('starting_inventory', 0) > b.get('auto_starting_inventory', 0)]))
+    explorable = exploration_target_ids(catalog)
+    automatic_external = {r for r in refs if not items[r]['craftable']
+                          and r not in explorable and r not in entered}
     n = len(C) + len(E)
     matrix = np.zeros((len(refs), n))
     for j, r in enumerate(refs):
@@ -314,7 +326,8 @@ def _consume_map(catalog, primary, goals, areas, progress, source_choices):
     for r, cap in caps.items():
         if r in C: bounds[C[r]] = (0, cap)
     for area, col in E.items(): bounds[col] = (0, None if area in extra_areas else 0)
-    base_A, base_b = -matrix, np.array([pool[r] for r in refs])
+    constrained = [j for j, r in enumerate(refs) if r not in automatic_external]
+    base_A, base_b = -matrix[constrained], np.array([pool[refs[j]] for j in constrained])
 
     def solve(objective, constraints=(), limits=None):
         if progress: progress()
@@ -404,34 +417,81 @@ def _consume_map(catalog, primary, goals, areas, progress, source_choices):
             active_refs = [r for r in active_refs if r not in tight]
         return x, constraints
 
-    route_constraints = []
-    if fixed:
-        _, route_constraints = fair({r: q for r, q in fixed.items() if r in assisted})
-    _, route_constraints = fair(source_aims, route_constraints)
-    cost = np.zeros(n)
-    for col in E.values(): cost[col] = 1
-    route = solve(cost, route_constraints)
-    extra_e = {a: int(math.ceil(max(0, route[col]) - 1e-7)) for a, col in E.items()}
+    # Compute finite demand before choosing travel, even when several unrelated
+    # ingredients are missing. Selecting Coal must not wait until Emberstone is
+    # also sourced before Mount Banon can appear in the route.
+    original_A, original_b, original_bounds = base_A, base_b, list(bounds)
+    for col in E.values(): bounds[col] = (0, 0)
+    for r in terminal:
+        upper = bounds[C[r]][1]
+        bounds[C[r]] = (0, min(upper if upper is not None else math.inf, aims.get(r, 0)))
+    constrained = [j for j, r in enumerate(refs) if r not in automatic_external and (r in C or pool[r] > 1e-8)]
+    base_A, base_b = -matrix[constrained], np.array([pool[refs[j]] for j in constrained])
+    potential_scales = {r: aims[r] for r in terminal if aims.get(r, 0) > 0}
+    _, potential_constraints = fair(potential_scales)
+    craft_cost = np.zeros(n)
+    for col in C.values(): craft_cost[col] = 1
+    potential_x = solve(craft_cost, potential_constraints)
+    potential_need = -matrix @ potential_x
+    base_A, base_b, bounds = original_A, original_b, original_bounds
+
+    source_constraints = []
+    for r, locations in chosen.items():
+        if not locations or r not in refs: continue
+        demand = max(0, potential_need[refs.index(r)] - pool[r])
+        if demand <= 1e-7: continue
+        row = np.zeros(n)
+        # A chosen location shares all its outputs with every connected recipe.
+        for a, col in E.items(): row[col] = -rates[a][r]
+        if any(row[col] < 0 and a in extra_areas for a, col in E.items()):
+            source_constraints.append((row, -demand))
+
+    if source_explores is not None:
+        # An explicit source click authorizes a fixed amount of exploration.
+        # Adding/changing Use + Void crafts reallocates these supplies only.
+        extra_e = {a: max((source_explores.get(r, {}).get(a, 0)
+                          for r, locations in chosen.items() if a in locations), default=0)
+                   for a in E}
+    else:
+        route_constraints = []
+        if fixed:
+            _, route_constraints = fair({r: q for r, q in fixed.items() if r in assisted}, route_constraints)
+        _, route_constraints = fair(source_aims, route_constraints)
+        cost = np.zeros(n)
+        for col in E.values(): cost[col] = 1
+        route = solve(cost, route_constraints)
+        # Preserve existing routes when migrating old saves. Only recover the
+        # formerly disconnected case where no selected source could activate.
+        if source_constraints and not any(route[col] > 1e-7 for col in E.values()):
+            route = solve(cost, [*route_constraints, *source_constraints])
+        extra_e = {a: int(math.ceil(max(0, route[col]) - 1e-7)) for a, col in E.items()}
     for a, col in E.items(): bounds[col] = (extra_e[a], extra_e[a])
     # Feasible independent maxima on the actual route normalize equal sharing.
     reserved = []
     if fixed: _, reserved = fair(fixed)
     maxima = {}
-    for r in terminal | set(fixed):
+    for r in {g['item_id'] for g in active if g['item_id'] in C}:
         objective = np.zeros(n); objective[C[r]] = -1
         try: maxima[r] = max(0, solve(objective, reserved)[C[r]])
         except ValueError as error:
             if 'unbounded' not in str(error).lower(): raise
             maxima[r] = 0
-    soft = {r: aims.get(r, q) if r in assisted and aims.get(r, 0) > 0 else q
-            for r, q in maxima.items() if r not in fixed and q >= 1 - 1e-8}
+    # A blocked downstream recipe must not demote an otherwise usable selected
+    # craft to surplus-only allocation (e.g. Machine Press -> Corn Oil with no Corn).
+    # Keep potential demand based on the full graph, but balance the recipes that
+    # can actually run on this route. Unselected intermediates remain implicit.
+    feasible = {r for r, q in maxima.items() if q >= 1 - 1e-8}
+    allocation_terminal = {r for r in feasible if not any(
+        r in needs(other) for other in feasible if other != r)}
+    soft = {r: aims.get(r, q) if source_explores is None and r in assisted and aims.get(r, 0) > 0 else q
+            for r, q in maxima.items() if r in allocation_terminal and r not in fixed}
     _, final_constraints = fair(soft, reserved)
     # Surplus intermediate mastery is a second pass. It cannot steal ingredients
     # from diaries, bows, or any other completed terminal allocation.
     intermediate = {}
     for g in active:
         r = g['item_id']
-        if r in terminal or r in fixed or r not in C: continue
+        if r in allocation_terminal or r in fixed or r not in C: continue
         objective = np.zeros(n); objective[C[r]] = -1
         try: intermediate[r] = max(0, solve(objective, final_constraints)[C[r]])
         except ValueError as error:
@@ -457,7 +517,7 @@ def _consume_map(catalog, primary, goals, areas, progress, source_choices):
             if count > caps.get(r, math.inf): return None
             counts[r] = count
             for child, q in items[r]['direct_ingredients'].items(): needed[child] += count * q * factor
-        if any(q > stock[r] + 1e-6 for r, q in needed.items() if r not in C and r not in free): return None
+        if any(q > stock[r] + 1e-6 for r, q in needed.items() if r not in C and r not in free and r not in automatic_external): return None
         return counts
     counts, retained = rounded(1), 1.
     if counts is None:
@@ -468,25 +528,20 @@ def _consume_map(catalog, primary, goals, areas, progress, source_choices):
             else: left = middle
         counts, retained = rounded(left), left
     if counts is None: raise ValueError('Could not verify map craft quantities.')
-    result = report(catalog, primary, goals, counts, extra_e, rates, pool, factor, free, maxima, aims, retained)
-    # Potential is itself a joint allocation. Relax only absent raw ingredients;
-    # three diaries cannot each claim the same existing White Parchment stock.
-    # These estimates explain shortages without becoming saved recipe caps.
-    for col in E.values(): bounds[col] = (0, 0)
-    for r in terminal:
-        upper = bounds[C[r]][1]
-        bounds[C[r]] = (0, min(upper if upper is not None else math.inf, aims.get(r, 0)))
-    constrained = [j for j, r in enumerate(refs) if r in C or pool[r] > 1e-8]
-    base_A, base_b = -matrix[constrained], np.array([pool[refs[j]] for j in constrained])
-    potential_scales = {r: aims[r] for r in terminal if aims.get(r, 0) > 0}
-    _, potential_constraints = fair(potential_scales)
-    potential_x = solve(cost, potential_constraints)
-    potential_need = -matrix @ potential_x
+    # Materialize only the supplies actually consumed by verified whole crafts.
+    # They do not become anchors that can grow exploration or other recipe aims.
+    automatic_supply = {r: max(0, math.ceil(sum(counts.get(c, 0) * items[c]['direct_ingredients'].get(r, 0) * factor
+                            for c in C) - stock[r] - 1e-7)) for r in automatic_external}
+    result = report(catalog, primary, goals, counts, extra_e, rates, pool, factor, free, maxima, aims, retained,
+                    automatic_supply=automatic_supply)
+    result['map_extra_explores'] = {a: q for a, q in extra_e.items() if q > 0}
+    result['map_source_explores'] = source_explores if source_explores is not None else {
+        r: {a: extra_e.get(a, 0) for a in locations} for r, locations in chosen.items()}
     result['map_potential'] = dict(
         goals=[dict(item_id=r, cap=float(potential_x[C[r]]), potential_crafts=float(potential_x[C[r]]))
                for r in sorted(C) if potential_x[C[r]] > 1e-7],
         missing=[dict(item_id=r, quantity=float(potential_need[j] - pool[r] - explored[r]))
-                 for j, r in enumerate(refs) if r not in C and potential_need[j] > pool[r] + explored[r] + 1e-6])
+                 for j, r in enumerate(refs) if r not in C and r not in automatic_external and potential_need[j] > pool[r] + explored[r] + 1e-6])
     result['model'] = 'map recipes with progressive fair sharing and explicit exploration sources'
     result['solver']['scope'] = 'progressive max-min sharing; verified whole-craft repair'
     result['secondary']['semantics'] = (
@@ -495,7 +550,7 @@ def _consume_map(catalog, primary, goals, areas, progress, source_choices):
     return result
 
 
-def report(catalog,primary,goals,counts,extra_e,rates,pool,factor,free,maxima,scales,retained):
+def report(catalog,primary,goals,counts,extra_e,rates,pool,factor,free,maxima,scales,retained,automatic_supply=None):
     items=catalog['items']; result=deepcopy(primary)
     cp,cc,explored=Counter(),Counter(),Counter()
     for r,q in counts.items():
@@ -512,7 +567,12 @@ def report(catalog,primary,goals,counts,extra_e,rates,pool,factor,free,maxima,sc
             expected_exploration_drops=0,crafted=0,free_perk_supply=0,consumed_by_crafting=0,
             reserved_target_output=0,expected_final_inventory=0)))
         b['expected_exploration_drops']+=explored[r]; b['crafted']+=cp[r]; b['consumed_by_crafting']+=cc[r]
-        remaining=b['expected_final_inventory']+explored[r]+cp[r]-cc[r]
+        automatic = (automatic_supply or {}).get(r, 0)
+        if automatic:
+            b['starting_inventory'] += automatic
+            b['auto_starting_inventory'] = b.get('auto_starting_inventory', 0) + automatic
+            b['required_external_supply'] = b.get('required_external_supply', 0) + automatic
+        remaining=b['expected_final_inventory']+explored[r]+cp[r]-cc[r]+automatic
         if r in free:
             supply=max(0,b['reserved_target_output']-remaining); b['free_perk_supply']+=supply; remaining+=supply
         if remaining<b['reserved_target_output']-1e-6: raise ValueError('Balanced allocation exceeded its material supply')

@@ -8,7 +8,7 @@ const catalog=JSON.parse(fs.readFileSync('data/catalog.json','utf8'));
 catalog.locations=Object.values(catalog.locations);
 const items=catalog.items;
 const id=name=>Object.values(items).find(i=>i.name===name).id;
-const ids=Object.fromEntries(['Ant Apple','Feathers','Fern Leaf','Purple Flower','Wood','Straw','Mushroom','Hide','Purple Diary','Green Diary','Leather Diary','Wooden Bow','White Parchment','Purple Parchment','Green Parchment','Mushroom Paste','Leather'].map(name=>[name,id(name)]));
+const ids=Object.fromEntries(['Ant Apple','Feathers','Fern Leaf','Purple Flower','Wood','Straw','Mushroom','Hide','Purple Diary','Green Diary','Leather Diary','Wooden Bow','White Parchment','Purple Parchment','Green Parchment','Mushroom Paste','Leather','Corn','Corn Oil','Engine','Small Screw','Small Spring'].map(name=>[name,id(name)]));
 const copy=value=>JSON.parse(JSON.stringify(value));
 const hill='explore:3',forest='explore:7';
 function area(location,name,explores,drops){return {location_id:location,name,explores,items:Object.entries(drops).map(([name,q])=>({item_id:ids[name],name,expected_drops:q}))};}
@@ -32,10 +32,10 @@ function harness(){
    let html='';Object.defineProperty(e,'innerHTML',{get:()=>html,set(value){html=value;for(const m of value.matchAll(/<[^>]*\bid="([^"]+)"[^>]*>/g)){if(key==='mapInspector'&&m[1]==='mapOptions')elements.delete('mapOptions');const child=el(m[1]);child.disabled=/\sdisabled(?:\s|=|>)/.test(m[0]);}}});elements.set(key,e);
   }return elements.get(key);
  }
- const state={secondary:[],targets:{[ids['Ant Apple']]:125},areas:[hill,forest,'explore:1'],map_planning:false,map_sources:{},map_node_usage:{},map_use_void:[],map_voided:[],map_hidden:[],map_unused_mode:'all',map_expanded_areas:[],inventory:'{}',passive_inventory:'{}',planner_mode:'goals',resource_saver:0,iron_depot:true,automatic_areas:null,mode:'best'};
+ const state={secondary:[],targets:{[ids['Ant Apple']]:125},areas:[hill,forest,'explore:1'],map_planning:false,map_sources:{},map_source_explores:null,map_node_usage:{},map_use_void:[],map_voided:[],map_hidden:[],map_unused_mode:'all',map_expanded_areas:[],inventory:'{}',passive_inventory:'{}',planner_mode:'goals',resource_saver:0,iron_depot:true,automatic_areas:null,mode:'best'};
  const ctx=vm.createContext({document:{createElement:()=>el('section')},$:el,window:{addEventListener(){}},result:{plans:[plan()]},selected:0,state,revision:1,items,catalog,
   fmt:String,esc:String,itemIcon:()=>'',mmBadge:()=>'',itemName:(ref,name)=>name||items[ref]?.name||ref,TOWER_MM:{items:{},gm_items:{}},explorationMenuOrder:[forest,'explore:1',hill],explorationYieldMultiplier:()=>1,
-  browserPlanner:{cancel(){}},setTimeout:()=>1,clearTimeout(){},timer:null,save(){},inventoryRows(){},inventoryData:()=>JSON.parse(state.inventory),guidedExploreIncrease:()=>'+50%',
+  browserPlanner:{cancel(){}},setTimeout:()=>1,clearTimeout(){},timer:null,save(){},inventoryRows(){},inventoryData:()=>JSON.parse(state.inventory),setInventory:stock=>{state.inventory=JSON.stringify(stock);},guidedExploreIncrease:()=>'+50%',
   changed(){ctx.revision++;},async calculate(){calculations.push(copy(state));},
   api:async(path,payload)=>{
    if(path==='/api/plan'){lastRequest=copy(payload);requests.push(lastRequest);return{job_id:String(++nextJob)};}
@@ -57,7 +57,7 @@ function harness(){
  const set=code=>vm.runInContext(code,ctx);
  async function click(selector,dataset){const button={dataset,closest:()=>null};await el('mapInspector').onclick({target:{closest:s=>s===selector?button:null}});}
  async function add(name,focus,quantity=0,available=true){await click('[data-map-add]',{mapAdd:ids[name],mapFocus:ids[focus],mapQuantity:String(quantity),mapAvailable:String(available)});}
- async function source(name='Mushroom',location=forest){await click('[data-map-area]',{mapSourceItem:ids[name],mapArea:location});}
+ async function source(name='Mushroom',location=forest){await click('[data-map-area]',{mapSourceItem:ids[name],mapArea:location,mapRate:"0.05"});}
  const seed=goals=>{set(`mapDrafts=${JSON.stringify(goals)};mapRender();`);};
  return{el,read,set,click,add,source,seed,state,requests,calculations,context:ctx,sourcesUI};
 }
@@ -153,6 +153,38 @@ test('craft suggestions, quantity warnings and source labels use the current sol
  h.context.customBox=box;h.set('mapRefreshCustomOptions(customBox)');assert.match(gaps.innerHTML,/Ingredients already supplied/);
  const originalApi=h.context.api;
  h.context.api=async(path,payload)=>path.startsWith('/api/item/')?{sources:path.endsWith('/'+ids.Mushroom)?[{kind:'explore',location_id:forest,location_name:'Forest',expected_drops_per_explore:.06}]:[]}:originalApi(path,payload);
- h.set(`mapSelect(${JSON.stringify(ids.Mushroom)});`);await h.sourcesUI(ids.Mushroom);assert.match(h.el('mapOptions').innerHTML,/Already in route/,'selected Forest is already part of the draft route');
+ h.set(`mapSelect(${JSON.stringify(ids.Mushroom)});`);await h.sourcesUI(ids.Mushroom);assert.match(h.el('mapOptions').innerHTML,/Explore more here/,'selected Forest is already part of the draft route');
+});
+test('Engine inspector links each missing external ingredient to its supply controls',async()=>{
+ const h=harness();h.context.items=Object.fromEntries(JSON.parse(fs.readFileSync('web/catalog.json','utf8')).metadata.items.map(i=>[i.id,i]));
+ h.state.inventory=JSON.stringify(Object.fromEntries(['Small Gear','Small Screw','Small Spring'].map(n=>[id(n),0])));h.set('mapRender();');h.seed([available('Engine')]);h.set(`mapSelect(${JSON.stringify(ids.Engine)});`);
+ const html=h.el('mapInspector').innerHTML;
+ assert.match(html,/Missing supplies/);
+ for(const name of ['Small Screw','Small Spring','Small Gear','Pocket Watch'])assert.ok(html.includes(`data-map-jump="${id(name)}"`),name);
+ assert.match(html,/>0 crafts<\/p>/);
+});
+test('external soft ingredients expose inventory supply without offering nonexistent exploration sources',async()=>{
+ const metadata=JSON.parse(fs.readFileSync('web/catalog.json','utf8')).metadata;
+ const enriched=Object.fromEntries(metadata.items.map(i=>[i.id,i]));
+ for(const [name,recipe,label] of [['Corn','Corn Oil','farming'],['Small Screw','Engine','other sources'],['Small Spring','Engine','other sources']]){
+  const h=harness();h.context.items=enriched;h.set("mapRender();");
+  const ref=ids[name];h.seed([available(recipe)]);
+  // Use the same authoritative potential fields returned by the solver.
+  h.set(`mapPlan.map_potential={goals:[],missing:[{item_id:${JSON.stringify(ref)},quantity:80.2}]};mapSelect(${JSON.stringify(ref)});`);
+  const html=h.el('mapInspector').innerHTML;
+  assert.match(html,/Provided as needed/);
+  assert.match(html,/id="mapSetExternal"/);assert.match(html,/id="mapExternalAmount"[^>]*value="0"/);
+  assert.doesNotMatch(html,/id="mapFindSources"|id="mapMeetPotential"/);
+  h.el('mapExternalAmount').value='40';h.el('mapSetExternal').onclick();
+  assert.equal(JSON.parse(h.state.inventory)[ref],40);
+  assert.deepEqual(h.read('state.map_sources'),{});
+  assert.equal(h.read('mapDrafts[0].consumer_mode'),'available');
+  h.el('mapExternalAmount').value='0';h.el('mapSetExternal').onclick();
+  assert.equal(JSON.parse(h.state.inventory)[ref],0);
+  assert.equal(h.read(`mapGraph.nodes.find(n=>n.id===${JSON.stringify(ref)}).autoSupply`),false);
+  h.el('mapAutoExternal').onclick();
+  assert.equal(Object.hasOwn(JSON.parse(h.state.inventory),ref),false);
+  assert.equal(h.read(`mapGraph.nodes.find(n=>n.id===${JSON.stringify(ref)}).autoSupply`),true);
+ }
 });
 (async()=>{let failures=0;for(const [name,fn] of cases){try{await fn();console.log('PASS '+name);}catch(e){failures++;console.error('FAIL '+name+'\n'+e.stack);}}if(failures)process.exitCode=1;else console.log('Map workflow interaction regressions passed.');})();
