@@ -20,6 +20,8 @@ function inventoryRoute(plan, items, locations, settings){
  for(const c of [...plan.crafts_in_dependency_order,...(plan.secondary?.crafts_in_dependency_order||[])])remaining[c.item_id]=(remaining[c.item_id]||0)+c.crafts;
  function visit(id){if(seen.has(id))return;seen.add(id);for(const child of Object.keys(items[id]?.direct_ingredients||{}))visit(child);if(remaining[id])order.push(id);}
  Object.keys(remaining).forEach(visit);
+ const recipes=Object.fromEntries(order.map(id=>[id,{id,out:items[id].output_quantity||1,
+  ingredients:Object.entries(items[id].direct_ingredients||{}).filter(([child])=>!free.has(child)).map(([child,q])=>[child,q*factor])}]));
  const slots=Number(settings.craftworks_slots??10);
  if(!Number.isInteger(slots)||slots<1||slots>100)throw Error('Craftworks slots must be a whole number from 1 to 100.');
  const continuous=slots>=order.length, stopWork=new Map(),activeWork={};
@@ -65,7 +67,15 @@ function inventoryRoute(plan, items, locations, settings){
   Object.assign(forecastStock,projection.available);for(const [id,n] of Object.entries(projection.work))forecastRemaining[id]-=n;start=end+1;
  }
  const interval=Math.max(1,...activeGroups.map(g=>g.end-g.start+1));
- const visits=[],empties=[];let current=0,uses=0,crafts=0,round=1,problem=null;
+ const visitRecipes=parts.map((_,i)=>activeGroups.find(g=>i>=g.start&&i<=g.end).recipes);
+ const stopPlaces=new Set(activeGroups.map(g=>g.end));
+ for(const p of parts)p.dropRates=Object.fromEntries(p.drops.map(d=>[d.id,d.q]));
+ const visits=[],empties=[];let uses=0,crafts=0,round=1,problem=null,verificationSteps=0;
+ const allowance={},needed={},future={};
+ for(const id of order){for(const [child,q] of recipes[id].ingredients)needed[child]=(needed[child]||0)+remaining[id]*q;future[id]=(future[id]||0)+remaining[id]*recipes[id].out;}
+ for(const p of parts)for(const d of p.drops)future[d.id]=(future[d.id]||0)+p.left*d.q;
+ function allowRound(){for(const id of order)allowance[id]=Math.min(remaining[id],Math.ceil(totals[id]*round/rounds)-(totals[id]-remaining[id]));}
+ allowRound();
  // Track every stock increase, including intermediate crafted outputs. A route
  // is complete only if its entire expected inventory flow stays within capacity.
  const inventoryPeaks={};
@@ -74,42 +84,60 @@ function inventoryRoute(plan, items, locations, settings){
   if(!Number.isFinite(quantity)||quantity < -1e-7||quantity>capacity+1e-7){problem=problem||`Expected inventory for ${items[id]?.name||id} exceeds the ${capacity} item limit. This loop is not verified.`;}
  }
  Object.keys(stock).forEach(checkStock);
- function craft(recipes=order){for(const id of recipes){if(problem)return;if(!remaining[id])continue;let count=Math.min(remaining[id],Math.ceil(totals[id]*round/rounds)-(totals[id]-remaining[id]));const recipe=items[id].direct_ingredients,out=items[id].output_quantity||1;
-  for(const [child,q] of Object.entries(recipe))if(!free.has(child))count=Math.min(count,Math.floor((available(child)+1e-8)/(q*factor)));
+ function craft(ids=order){for(const id of ids){if(problem)return;if(!remaining[id]||allowance[id]<=0)continue;let count=allowance[id];const {ingredients,out}=recipes[id];
+  for(const [child,q] of ingredients)count=Math.min(count,Math.floor((available(child)+1e-8)/q));
   if(!free.has(id))count=Math.min(count,Math.floor((capacity-(stock[id]||0)+1e-8)/out));
   if(count<=0)continue;
-  for(const [child,q] of Object.entries(recipe))if(!free.has(child)){
-   const needed=count*q*factor,provided=Math.min(incoming[child]||0,needed);
-   incoming[child]=(incoming[child]||0)-provided;stock[child]=Math.max(0,(stock[child]||0)-(needed-provided));
+  for(const [child,q] of ingredients){
+   const used=count*q,provided=Math.min(incoming[child]||0,used);
+   incoming[child]=(incoming[child]||0)-provided;stock[child]=Math.max(0,(stock[child]||0)-(used-provided));needed[child]-=used;
   }
-  if(!free.has(id))stock[id]=(stock[id]||0)+count*out;remaining[id]-=count;crafts+=count;checkStock(id);
+  if(!free.has(id))stock[id]=(stock[id]||0)+count*out;remaining[id]-=count;allowance[id]-=count;future[id]-=count*out;crafts+=count;checkStock(id);
   if(recording){if(!stopWork.has(recording))stopWork.set(recording,{});const work=stopWork.get(recording);work[id]=(work[id]||0)+count;}else activeWork[id]=(activeWork[id]||0)+count;
  }}
  function atStop(key){recording=key;craft();recording=null;}
- function clearFinished(){if(problem)return false;const needed={};for(const [id,n] of Object.entries(remaining))for(const [child,q] of Object.entries(items[id].direct_ingredients))needed[child]=(needed[child]||0)+n*q*factor;
-  const future={};for(const p of parts)for(const d of p.drops)future[d.id]=(future[d.id]||0)+p.left*d.q;
-  for(const [id,n] of Object.entries(remaining))future[id]=(future[id]||0)+n*(items[id].output_quantity||1);
+ function clearFinished(){if(problem)return false;
   const cleared=[];for(const [id,n] of Object.entries(stock)){const keep=Math.max(0,(needed[id]||0)-(future[id]||0)-(incoming[id]||0));const quantity=Math.floor(n-keep+1e-8);if(quantity>0){cleared.push({id,quantity});stock[id]=n-quantity;}}
   if(cleared.length){empties.push({after:uses,items:cleared});return true;}return false;
  }
- function fits(p){return p.drops.every(d=>(stock[d.id]||0)+d.q*drinksPerClick<=capacity+1e-7);}
+ function nextCraftClick(p,ids){
+  let next=Infinity;
+  for(const id of ids){
+   if(allowance[id]<=0||remaining[id]<=0)continue;
+   const {ingredients,out}=recipes[id];
+   if(!free.has(id)&&capacity-(stock[id]||0)+1e-8<out)continue;
+   let clicks=1;
+   for(const [child,q] of ingredients){
+    const missing=q-available(child)-1e-8;
+    if(missing>0){const perClick=(p.dropRates[child]||0)*drinksPerClick;if(!perClick){clicks=Infinity;break;}clicks=Math.max(clicks,Math.ceil(missing/perClick));}
+   }
+   next=Math.min(next,clicks);if(next===1)break;
+  }
+  return next;
+ }
  atStop('start');
  for(round=1;round<=rounds&&!problem;round++){
-  if(round>25000){problem='Loop verification reached 25,000 rounds. Increase capacity or reduce the crafting plan.';break;}
+  allowRound();
   for(const [placeIndex,p] of parts.entries()){
    const v={id:p.id,name:p.name,drinks:0,explores:0,after:uses,round};visits.push(v);
-   for(let j=0;j<p.batch&&!problem;j++){
-    if(uses>=250000){problem='Loop verification reached 250,000 drink uses. Reduce the plan to verify the full loop.';break;}
-    if(j%drinksPerClick===0&&!fits(p)){const blockers=p.drops.filter(d=>(stock[d.id]||0)+d.q*drinksPerClick>capacity+1e-7).map(d=>items[d.id]?.name||d.id);problem=`The loop needs more room for ${blockers.slice(0,4).join(', ')}. Its full inventory sequence could not be verified.`;break;}
-    for(const d of p.drops){stock[d.id]=(stock[d.id]||0)+d.q;checkStock(d.id);}if(problem)break;
-    p.left--;uses++;v.drinks++;v.explores+=p.perDrink;if((j+1)%drinksPerClick===0){const group=activeGroups.find(g=>placeIndex>=g.start&&placeIndex<=g.end);craft(group.recipes);}
+   for(let j=0;j<p.batch&&!problem;){
+    let clicks=(p.batch-j)/drinksPerClick;
+    for(const d of p.drops)if(d.q>0)clicks=Math.min(clicks,Math.floor((capacity-(stock[d.id]||0)+1e-7)/(d.q*drinksPerClick)));
+    if(clicks<1){const blockers=p.drops.filter(d=>(stock[d.id]||0)+d.q*drinksPerClick>capacity+1e-7).map(d=>items[d.id]?.name||d.id);problem=`The loop needs more room for ${blockers.slice(0,4).join(', ')}. Its full inventory sequence could not be verified.`;break;}
+    // Until the next payable craft, drops only increase stock. Checking the
+    // endpoint proves every intervening click fits, including five-drink food.
+    clicks=settings._singleClick?1:Math.min(clicks,nextCraftClick(p,visitRecipes[placeIndex]));
+    verificationSteps++;
+    const drinks=clicks*drinksPerClick;
+    for(const d of p.drops){const quantity=d.q*drinks;stock[d.id]=(stock[d.id]||0)+quantity;future[d.id]-=quantity;checkStock(d.id);}if(problem)break;
+    p.left-=drinks;uses+=drinks;j+=drinks;v.drinks+=drinks;v.explores+=p.perDrink*drinks;craft(visitRecipes[placeIndex]);
    }
-   if(!continuous&&activeGroups.some(g=>g.end===placeIndex))atStop(p.id);
+   if(!continuous&&stopPlaces.has(placeIndex))atStop(p.id);
   }
   clearFinished();atStop(parts.at(-1)?.id||'start');
  }
  // Empty completed stacks when needed to finish the remaining crafts.
- if(!problem){let previous=-1;while(Object.values(remaining).some(n=>n)&&previous!==crafts){previous=crafts;clearFinished();atStop(parts.at(-1)?.id||'start');}
+ if(!problem){allowRound();let previous=-1;while(Object.values(remaining).some(n=>n)&&previous!==crafts){previous=crafts;clearFinished();atStop(parts.at(-1)?.id||'start');}
   if(Object.values(remaining).some(n=>n))problem='The expected drops do not finish every craft within this inventory size. Increase capacity or review the starting inventory.';
  }
  if(!problem&&!settings._rounds&&rounds>1){
@@ -125,6 +153,6 @@ function inventoryRoute(plan, items, locations, settings){
   for(let span=interval-1;span>=1;span--){const candidate=inventoryRoute(plan,items,locations,{...settings,_rounds:rounds,_groupSpan:span});if(candidate.complete)return candidate;}
  }
  const craftStops=[...stopWork].map(([id,work])=>{const recipes=order.filter(ref=>work[ref]>0),sets=[];for(let i=0;i<recipes.length;i+=slots)sets.push(recipes.slice(i,i+slots));return {id,name:id==='start'?'Before the first location':`After ${parts.find(p=>p.id===id)?.name||'the final location'}`,recipes,sets,amounts:Object.fromEntries(recipes.map(ref=>[ref,work[ref]/(id==='start'?1:rounds)]))};});
- return {capacity,inventoryPeaks,inventoryVerified:!problem,method,drinksPerClick,activeWork,stamina:parts.reduce((n,p)=>n+p.scheduled*p.staminaPerDrink,0),rounds,slots,setups,continuous,interval,activeGroups:activeGroups.map(g=>({...g,from:parts[g.start].name,to:parts[g.end].name,after:g.start?parts[g.start-1].id:null})),craftStops,minimumContinuousSlots:order.length,minimumStopSlots:Math.max(0,...craftStops.map(s=>s.recipes.length)),crafting:order.map(id=>({id,perLoop:totals[id]/rounds,total:totals[id]})),extraExplores:parts.reduce((n,p)=>n+p.scheduled*p.perDrink-p.explores,0),parts:parts.map(p=>({...p,visits:visits.filter(v=>v.id===p.id).length,maxRun:visits.reduce((n,v)=>v.id===p.id?Math.max(n,v.drinks):n,0)})),visits,empties,problem,uses,complete:!problem};
+ return {capacity,inventoryPeaks,verificationSteps,inventoryVerified:!problem,method,drinksPerClick,activeWork,stamina:parts.reduce((n,p)=>n+p.scheduled*p.staminaPerDrink,0),rounds,slots,setups,continuous,interval,activeGroups:activeGroups.map(g=>({...g,from:parts[g.start].name,to:parts[g.end].name,after:g.start?parts[g.start-1].id:null})),craftStops,minimumContinuousSlots:order.length,minimumStopSlots:Math.max(0,...craftStops.map(s=>s.recipes.length)),crafting:order.map(id=>({id,perLoop:totals[id]/rounds,total:totals[id]})),extraExplores:parts.reduce((n,p)=>n+p.scheduled*p.perDrink-p.explores,0),parts:parts.map(p=>({...p,visits:visits.filter(v=>v.id===p.id).length,maxRun:visits.reduce((n,v)=>v.id===p.id?Math.max(n,v.drinks):n,0)})),visits,empties,problem,uses,complete:!problem};
 }
 if(typeof module!=='undefined')module.exports={inventoryRoute};
