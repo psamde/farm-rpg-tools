@@ -5,7 +5,7 @@ guideUI.innerHTML=`<div class="sectiontitle"><h2 id="guidedTitle">Put your lefto
 document.body.append(guideUI);
 let guideApplying=false,guideBusy=false,guidePicks=new Map(),guideCombined=null;
 let guideToken=0,guideRevision=0,guideChoices=[],guideShown=5,guideStock={},guideEstimates=[];
-function guidePayload(){return {action:'guided',map_planning:state.map_planning===true,map_sources:state.map_sources||{},combinations_mode:state.mode==='combinations',planner_mode:state.planner_mode,targets:state.planner_mode==='passive'?{}:{...state.targets},secondary:state.secondary.map(g=>({...g})),areas:[...state.areas],automatic_areas:state.automatic_areas,inventory:inventoryData(),resource_saver:state.resource_saver,iron_depot:state.iron_depot,runecube:state.runecube,cockatrice_ether_source:state.cockatrice_ether_source,selected_plan_key:result.plans[selected].area_set_id};}
+function guidePayload(){return {action:'guided',map_planning:state.map_planning===true,map_sources:state.map_sources||{},map_node_usage:state.map_node_usage||{},combinations_mode:state.mode==='combinations',planner_mode:state.planner_mode,targets:state.planner_mode==='passive'?{}:{...state.targets},secondary:state.secondary.map(g=>({...g})),areas:[...state.areas],automatic_areas:state.automatic_areas,inventory:inventoryData(),resource_saver:state.resource_saver,iron_depot:state.iron_depot,runecube:state.runecube,cockatrice_ether_source:state.cockatrice_ether_source,selected_plan_key:result.plans[selected].area_set_id};}
 function stopGuide(){guideToken++;if(guideBusy&&!guideApplying)browserPlanner.cancel();guideUI.close();}
 $('finishGuide').onclick=stopGuide;
 guideUI.addEventListener('cancel',()=>{guideToken++;if(guideBusy&&!guideApplying)browserPlanner.cancel();});
@@ -31,7 +31,6 @@ async function compareGuided(only=null){
  const material=$('guidedMaterial').value,token=++guideToken;guideRevision=revision;guideShown=5;guideChoices=[];
  $('guidedOptions').innerHTML='';$('guidedOther').hidden=true;$('moreGuided').hidden=true;
  $('guidedAmount').innerHTML=`${itemName(material,items[material].name)} · ${fmt(Math.floor(guideStock[material]))} available. Options rank by use of this material, then other existing supplies. Compare the exploration cost before choosing.`;
- if(state.secondary.length>=20){$('guidedStatus').textContent='Your plan has 20 leftover crafts. Remove one before adding another.';return;}
  const estimates=suggestCrafts(items,guideStock,state,material,1000,true);
  guideEstimates=[...estimates.ready.map(r=>({...r,assist:false})),...estimates.explore.map(r=>({...r,assist:true}))];
  const shortlist=only?guideEstimates.filter(r=>r.id===only):[...estimates.ready.slice(0,5).map(r=>({...r,assist:false})),...estimates.explore.slice(0,5).map(r=>({...r,assist:true}))];
@@ -85,7 +84,6 @@ $('guidedOptions').onchange=e=>{
 };
 $('reviewGuidedSelection').onclick=async()=>{
  if(revision!==guideRevision){$('guidedStatus').textContent='Your plan changed. Reopen the guide.';return;}
- if(state.secondary.length+guidePicks.size>20){$('guidedStatus').textContent='Choose fewer crafts: a plan supports 20 leftover targets.';return;}
  const token=++guideToken;guideBusy=true;const chosen=[...guidePicks.values()].map(o=>({...o.goal}));
  $('guidedOptions').inert=true;$('reviewGuidedSelection').disabled=true;
  $('guidedStatus').textContent='Checking selected crafts together…';
@@ -118,9 +116,9 @@ $('applyGuidedSelection').onclick=async()=>{
 
 /* Quests share Buddy Farm's native questline/step grouping. */
 const questPanel=document.createElement('section');questPanel.className='quest-picker';
-questPanel.innerHTML=`<div class="modebuttons" role="group" aria-label="Target source"><button type="button" id="itemGoalMode" aria-pressed="true">Items</button><button type="button" id="questGoalMode" aria-pressed="false">Quests</button></div><div id="questInputs" hidden><p class="hint">Choose a questline and the steps you still need. Add their combined requirements to your primary targets, then review leftovers as usual. Rewards are not counted as supplies.</p><label for="questSearch">Find a questline</label><input id="questSearch" placeholder="Search questlines or quest names…"><label for="questLine">Questline</label><select id="questLine"></select><div class="quest-bulk"><button id="selectAllQuests" type="button">Select all</button><button id="deselectAllQuests" type="button">Deselect all</button><small>Current questline</small></div><div id="questSteps"></div><div id="questRequirements"></div><p id="questStatus" role="status"></p><button type="button" id="addQuestTargets" class="primary" disabled>Add selected quest requirements</button></div>`;
+questPanel.innerHTML=`<div class="modebuttons" role="group" aria-label="Target source"><button type="button" id="itemGoalMode" aria-pressed="true">Items</button><button type="button" id="questGoalMode" aria-pressed="false">Quests</button></div><div id="questInputs" hidden><p class="hint">Choose your quest steps, then tick the items you want to plan for. Rewards are not counted as supplies.</p><label for="questSearch">Find a questline</label><input id="questSearch" placeholder="Search questlines or quest names…"><label for="questLine">Questline</label><select id="questLine"></select><div class="quest-bulk"><button id="selectAllQuests" type="button">Select all</button><button id="deselectAllQuests" type="button">Deselect all</button><small>Current questline</small></div><div id="questSteps"></div><div id="questRequirements"></div><p id="questStatus" role="status"></p><button type="button" id="addQuestTargets" class="primary" disabled>Add selected quest requirements</button></div>`;
 $('primaryInputs').insertBefore(questPanel,$('primaryInputs').querySelector('.targetbarcontent'));
-let questData=null,questChosen=new Set();
+let questData=null,questChosen=new Set(),questItemExcluded=new Set();
 $('itemGoalMode').onclick=()=>{$('questInputs').hidden=true;$('addForm').hidden=false;$('itemGoalMode').setAttribute('aria-pressed','true');$('questGoalMode').setAttribute('aria-pressed','false');};
 $('questGoalMode').onclick=async()=>{
  $('questInputs').hidden=false;$('addForm').hidden=true;$('itemGoalMode').setAttribute('aria-pressed','false');$('questGoalMode').setAttribute('aria-pressed','true');
@@ -129,12 +127,65 @@ $('questGoalMode').onclick=async()=>{
 function renderQuestLines(){const q=$('questSearch').value.toLowerCase();const rows=questData.questlines.filter(l=>l.name.toLowerCase().includes(q)||l.quests.some(s=>s.name.toLowerCase().includes(q)));$('questLine').innerHTML=rows.map(l=>`<option value="${esc(l.id)}">${esc(l.name.replace(/<[^>]*>/g,' '))}</option>`).join('');renderQuestSteps();}
 function questPartNumber(n){let out='';for(const [value,label] of [[1000,'M'],[900,'CM'],[500,'D'],[400,'CD'],[100,'C'],[90,'XC'],[50,'L'],[40,'XL'],[10,'X'],[9,'IX'],[5,'V'],[4,'IV'],[1,'I']])while(n>=value){out+=label;n-=value;}return out;}
 function renderQuestSteps(){const line=questData.questlines.find(l=>l.id===$('questLine').value);$('questSteps').innerHTML=line?.quests.map((q,index)=>`<label class="quest-step" title="${esc(q.name)}"><input type="checkbox" data-quest="${esc(q.id)}" ${questChosen.has(q.id)?'checked':''}><span>Part ${esc(q.name.match(/(?:^|\s)([IVXLCDM]+|\d+)$/)?.[1]||questPartNumber(index+1))}</span></label>`).join('')||'<p>No questlines match.</p>';renderQuestRequirements();}
-function selectedQuestRequirements(newOnly=false){const required={},seen=new Set();let silver=0;for(const line of questData.questlines)for(const q of line.quests)if(questChosen.has(q.id)&&!seen.has(q.id)&&(!newOnly||!state.quest_selection.includes(q.id))){seen.add(q.id);silver+=Number(q.silver);for(const r of q.items)required[r.id]=(required[r.id]||0)+Number(r.quantity);}return {required,silver};}
-function renderQuestRequirements(){const {required,silver}=selectedQuestRequirements();$('questRequirements').innerHTML=`<h3>${questChosen.size} selected quest steps</h3>${Object.entries(required).map(([id,n])=>`<div class="quest-requirement">${itemName(id,items[id]?.name||id)}<strong>${fmt(n)}</strong>${!eligibleTarget(items[id])?'<small>Bring from outside crafting / exploration</small>':''}</div>`).join('')}${silver?`<p>Also required: ${fmt(silver)} silver.</p>`:''}`;$('addQuestTargets').disabled=!Object.keys(selectedQuestRequirements(true).required).some(id=>eligibleTarget(items[id]));}
+function chosenQuests(){
+ const seen=new Set();return questData.questlines.flatMap(l=>l.quests).filter(q=>{if(!questChosen.has(q.id)||seen.has(q.id))return false;seen.add(q.id);return true;});
+}
+function questItemImported(questId,itemId){
+ const tracked=state.quest_imported_items||{};
+ // Older saves recorded whole quests. Keep those imports counted in full.
+ return Object.hasOwn(tracked,questId)?tracked[questId].includes(itemId):(state.quest_selection||[]).includes(questId);
+}
+function selectedQuestRequirements(newOnly=false){
+ const required={};let silver=0;
+ for(const q of chosenQuests()){
+  silver+=Number(q.silver);
+  for(const r of q.items)if(!newOnly||!questItemImported(q.id,r.id))required[r.id]=(required[r.id]||0)+Number(r.quantity);
+ }
+ return {required,silver};
+}
+function selectedQuestItemIds(){return Object.keys(selectedQuestRequirements(true).required).filter(id=>eligibleTarget(items[id])&&!questItemExcluded.has(id));}
+function updateQuestImportButton(){
+ const count=selectedQuestItemIds().length;
+ $('addQuestTargets').disabled=!count;$('addQuestTargets').textContent=count?`Add ${count} ${count===1?'item':'items'} to targets`:'Select items to add';
+ if($('questItemCount'))$('questItemCount').textContent=`${count} selected`;
+}
+function renderQuestRequirements(){
+ const {required,silver}=selectedQuestRequirements(),pending=selectedQuestRequirements(true).required;
+ const rows=Object.entries(required).sort(([a],[b])=>(items[a]?.name||a).localeCompare(items[b]?.name||b));
+ $('questRequirements').innerHTML=rows.length?`<div class="quest-import-heading"><h3>Items to import</h3><div class="quest-bulk" role="group" aria-label="Items to import"><button type="button" data-quest-items="all">Select all items</button><button type="button" data-quest-items="none">Deselect all items</button><small id="questItemCount"></small></div></div><p class="hint">Unchecked items stay available to add later. Already imported amounts won’t be added twice.</p><div class="quest-requirements-list">${rows.map(([id,n])=>{
+  const eligible=eligibleTarget(items[id]),ready=eligible&&(pending[id]||0)>0;
+  const note=!eligible?'Bring separately':!ready?'Already added':pending[id]<n?`${fmt(n-pending[id])} already added`:'';
+  return `<label class="quest-requirement${ready?'':' is-unavailable'}"><input type="checkbox" data-quest-item="${esc(id)}" ${ready&&!questItemExcluded.has(id)?'checked':''} ${ready?'':'disabled'}><span class="quest-item-name">${itemName(id,items[id]?.name||id)}${note?`<small>${note}</small>`:''}</span><strong>${fmt(ready?pending[id]:n)}</strong></label>`;
+ }).join('')}</div>${rows.some(([id])=>!eligibleTarget(items[id]))?'<p class="hint">Bring separately: these items cannot be crafted or collected by exploring.</p>':''}${silver?`<p class="hint">Also required: ${fmt(silver)} silver.</p>`:''}`:'<p class="hint">Select quest steps to see their items.</p>';
+ updateQuestImportButton();
+}
+$('questRequirements').onchange=e=>{
+ const id=e.target.dataset.questItem;if(!id)return;
+ e.target.checked?questItemExcluded.delete(id):questItemExcluded.add(id);updateQuestImportButton();
+};
+$('questRequirements').onclick=e=>{
+ const button=e.target.closest('[data-quest-items]');if(!button)return;
+ for(const id of Object.keys(selectedQuestRequirements(true).required))if(eligibleTarget(items[id]))button.dataset.questItems==='all'?questItemExcluded.delete(id):questItemExcluded.add(id);
+ renderQuestRequirements();
+};
 $('questSearch').oninput=renderQuestLines;$('questLine').onchange=renderQuestSteps;
 $('questSteps').onchange=e=>{const id=e.target.dataset.quest;if(!id)return;e.target.checked?questChosen.add(id):questChosen.delete(id);renderQuestRequirements();};
-$('addQuestTargets').onclick=()=>{const {required}=selectedQuestRequirements(true),next={...state.targets};for(const [id,n] of Object.entries(required))if(eligibleTarget(items[id]))next[id]=(next[id]||0)+n;if(Object.keys(next).length>20||Object.values(next).some(n=>n>100000000)){$('questStatus').textContent='Select fewer steps: a plan supports up to 20 targets and 100 million of each.';return;}state.targets=next;state.quest_selection=[...new Set([...state.quest_selection,...questChosen])];targets();changed();$('questStatus').textContent='Requirements added. Items marked “Bring” remain your responsibility; the planner handles the crafting and exploration targets.';$('addQuestTargets').disabled=true;};
+$('addQuestTargets').onclick=()=>{
+ const chosen=new Set(selectedQuestItemIds());if(!chosen.size)return;
+ const {required}=selectedQuestRequirements(true),next={...state.targets};
+ for(const id of chosen)next[id]=(next[id]||0)+required[id];
+ if(Object.values(next).some(n=>n>100000000)){$('questStatus').textContent='One item would exceed 100 million. Select fewer quest steps for that item.';return;}
+ state.quest_imported_items??={};
+ for(const q of chosenQuests()){
+  const added=q.items.filter(r=>chosen.has(r.id)&&!questItemImported(q.id,r.id)).map(r=>r.id);
+  if(!added.length)continue;
+  state.quest_imported_items[q.id]=[...new Set([...(state.quest_imported_items[q.id]||[]),...added])];
+  if(!state.quest_selection.includes(q.id))state.quest_selection.push(q.id);
+ }
+ state.targets=next;targets();changed();renderQuestRequirements();
+ $('questStatus').textContent=`Added ${chosen.size} ${chosen.size===1?'item':'items'} to your targets. You can import the remaining items whenever you need them.`;
+};
 
-window.addEventListener('planner-cleared',()=>{questChosen.clear();if(questData)renderQuestSteps();});
+window.addEventListener('planner-cleared',()=>{questChosen.clear();questItemExcluded.clear();if(questData)renderQuestSteps();});
 
 for(const [id,select] of [['selectAllQuests',true],['deselectAllQuests',false]])$(id).onclick=()=>{const line=questData?.questlines.find(l=>l.id===$('questLine').value);for(const q of line?.quests||[])select?questChosen.add(q.id):questChosen.delete(q.id);renderQuestSteps();};

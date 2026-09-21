@@ -10,9 +10,9 @@ from functools import lru_cache
 import math
 
 
-def consume(catalog, primary, goals, areas=None, max_areas=15, progress=None, *, map_planning=False, map_sources=None, map_source_explores=None):
+def consume(catalog, primary, goals, areas=None, max_areas=15, progress=None, *, map_planning=False, map_sources=None, map_source_explores=None, map_node_usage=None):
     if map_planning:
-        return _consume_map(catalog, primary, goals, areas, progress, map_sources or {}, map_source_explores)
+        return _consume_map(catalog, primary, goals, areas, progress, map_sources or {}, map_source_explores, map_node_usage or {})
     import numpy as np
     from scipy.optimize import Bounds, LinearConstraint, milp
     from planner import resolve
@@ -248,7 +248,7 @@ def consume(catalog, primary, goals, areas=None, max_areas=15, progress=None, *,
     return report(catalog,primary,goals,counts,extra_e,rates,pool,factor,free,maxima,scales,retained)
 
 
-def _consume_map(catalog, primary, goals, areas, progress, source_choices, source_explores=None):
+def _consume_map(catalog, primary, goals, areas, progress, source_choices, source_explores=None, node_usage=None):
     """Plan recipe selections together; current output is never a persistent cap.
 
     Potential is anchored to primary supplies. Chosen sources may fill missing
@@ -321,13 +321,38 @@ def _consume_map(catalog, primary, goals, areas, progress, source_choices, sourc
         for craft, col in C.items():
             matrix[j, col] = (items[craft]['output_quantity'] if craft == r else 0) - items[craft]['direct_ingredients'].get(r, 0) * factor
         for area, col in E.items(): matrix[j, col] = rates[area][r]
+    # Node choices constrain physical material use, not downstream recipe caps.
+    # Gross use is counted at direct recipe edges, once per consumed ingredient.
+    usage_rows, usage_limits = {}, {}
+    if not isinstance(node_usage, dict): raise ValueError('Invalid node usage.')
+    for ref, choice in node_usage.items():
+        if ref not in items or not isinstance(choice, dict) or choice.get('mode') not in {'use','unused','void','force','limit'}:
+            raise ValueError('Invalid node usage.')
+        if choice['mode'] == 'limit':
+            amount = choice.get('amount')
+            if isinstance(amount, bool) or not isinstance(amount, (int,float)) or not math.isfinite(amount) or not 0 <= amount <= 10**12:
+                raise ValueError('Invalid material use limit.')
+            usage_limits[ref] = amount
+        if ref not in refs or ref in free: continue
+        row = np.zeros(n)
+        for craft, col in C.items(): row[col] = items[craft]['direct_ingredients'].get(ref, 0) * factor
+        usage_rows[ref] = row
+    limit_rows = [(usage_rows[r], q) for r, q in usage_limits.items() if r in usage_rows]
+    # Implicit recipes exist to supply selected crafts, not to dump forced
+    # ingredients into unrequested surplus that whole-craft repair discards.
+    selected = {g['item_id'] for g in goals}
+    for r in C.keys() - selected:
+        row = matrix[refs.index(r)].copy()
+        for col in E.values(): row[col] = 0
+        limit_rows.append((row, 0))
     bounds = [(0, None)] * n
     caps = {g['item_id']: g['cap'] for g in goals if g['cap'] is not None}
     for r, cap in caps.items():
         if r in C: bounds[C[r]] = (0, cap)
     for area, col in E.items(): bounds[col] = (0, None if area in extra_areas else 0)
     constrained = [j for j, r in enumerate(refs) if r not in automatic_external]
-    base_A, base_b = -matrix[constrained], np.array([pool[refs[j]] for j in constrained])
+    base_A = np.vstack([-matrix[constrained], *[row.reshape(1, -1) for row, _ in limit_rows]])
+    base_b = np.r_[[pool[refs[j]] for j in constrained], [q for _, q in limit_rows]]
 
     def solve(objective, constraints=(), limits=None):
         if progress: progress()
@@ -380,20 +405,24 @@ def _consume_map(catalog, primary, goals, areas, progress, source_choices, sourc
     assisted = {r for r in terminal | set(fixed) if any(locations and ref in needs(r) for ref, locations in chosen.items())}
     source_aims = {r: aims[r] for r in assisted if aims.get(r, 0) > 0}
 
-    def lower(r, quantity):
-        row = np.zeros(n); row[C[r]] = -1
-        return row, -max(0, quantity - 1e-7)
-
-    def fair(scales, constraints=()):
+    def fair(scales, constraints=(), rewards=None, offsets=None):
         """Progressive max-min completion, freeing blocked peers at each step."""
         constraints = list(constraints)
-        active_refs = sorted(r for r, q in scales.items() if q > 1e-7 and r in C)
+        if rewards is None:
+            rewards = {}
+            for r in scales:
+                if r in C:
+                    row = np.zeros(n); row[C[r]] = 1; rewards[r] = row
+        offsets = offsets or {}
+        def floor_row(r, progress):
+            return -rewards[r], -(offsets.get(r, 0) + max(0, progress - max(1e-5, abs(progress) * 1e-8)))
+        active_refs = sorted(r for r, q in scales.items() if q > 1e-7 and r in rewards)
         x = solve(np.zeros(n), constraints)
         while active_refs:
             rows = [(np.r_[row, 0.], upper) for row, upper in constraints]
             for r in active_refs:
-                row = np.zeros(n + 1); row[C[r]] = -1 / scales[r]; row[-1] = 1
-                rows.append((row, 0))
+                row = np.r_[-rewards[r] / scales[r], 1.]
+                rows.append((row, -offsets.get(r, 0) / scales[r]))
             a = np.vstack([np.c_[base_A, np.zeros(len(base_A))], *[row.reshape(1, -1) for row, _ in rows]])
             b = np.r_[base_b, [upper for _, upper in rows]]
             objective = np.zeros(n + 1); objective[-1] = -1
@@ -404,16 +433,15 @@ def _consume_map(catalog, primary, goals, areas, progress, source_choices, sourc
                           constraints=LinearConstraint(a, -np.inf, b), options={'time_limit': 15})
             if not result.success: raise ValueError('Could not share map supplies: ' + result.message)
             fraction = min(1, max(0, result.x[-1])); x = result.x[:-1]
-            floor_rows = [lower(r, fraction * scales[r]) for r in active_refs]
+            floor_rows = [floor_row(r, fraction * scales[r]) for r in active_refs]
             tight = []
             for r in active_refs:
-                objective = np.zeros(n); objective[C[r]] = -1
-                maximum = solve(objective, [*constraints, *floor_rows])[C[r]]
+                maximum = float(rewards[r] @ solve(-rewards[r], [*constraints, *floor_rows])) - offsets.get(r, 0)
                 if fraction >= 1 - 1e-7 or maximum <= fraction * scales[r] + max(1e-5, scales[r] * 1e-8): tight.append(r)
             if not tight:
                 # Numerical degeneracy cannot turn this bounded loop into a hang.
-                tight = [min(active_refs, key=lambda r: x[C[r]] / scales[r])]
-            constraints.extend(lower(r, fraction * scales[r]) for r in tight)
+                tight = [min(active_refs, key=lambda r: (float(rewards[r] @ x) - offsets.get(r, 0)) / scales[r])]
+            constraints.extend(floor_row(r, fraction * scales[r]) for r in tight)
             active_refs = [r for r in active_refs if r not in tight]
         return x, constraints
 
@@ -426,7 +454,8 @@ def _consume_map(catalog, primary, goals, areas, progress, source_choices, sourc
         upper = bounds[C[r]][1]
         bounds[C[r]] = (0, min(upper if upper is not None else math.inf, aims.get(r, 0)))
     constrained = [j for j, r in enumerate(refs) if r not in automatic_external and (r in C or pool[r] > 1e-8)]
-    base_A, base_b = -matrix[constrained], np.array([pool[refs[j]] for j in constrained])
+    base_A = np.vstack([-matrix[constrained], *[row.reshape(1, -1) for row, _ in limit_rows]])
+    base_b = np.r_[[pool[refs[j]] for j in constrained], [q for _, q in limit_rows]]
     potential_scales = {r: aims[r] for r in terminal if aims.get(r, 0) > 0}
     _, potential_constraints = fair(potential_scales)
     craft_cost = np.zeros(n)
@@ -469,6 +498,27 @@ def _consume_map(catalog, primary, goals, areas, progress, source_choices, sourc
     # Feasible independent maxima on the actual route normalize equal sharing.
     reserved = []
     if fixed: _, reserved = fair(fixed)
+    # Force Use All minimizes the selected material's remaining stock on this
+    # route. Subtract its own production so an intermediate cannot manufacture
+    # and consume extra copies merely to improve its score. Fixed recipe aims
+    # keep precedence; multiple forced materials share achievable improvement.
+    rewards, force_scales, offsets = {}, {}, {}
+    forced = sorted(r for r, choice in node_usage.items() if choice['mode'] == 'force'
+                    and r in usage_rows and r not in automatic_external and np.any(usage_rows[r]))
+    if forced:
+        start = solve(craft_cost, reserved)
+        force_floor = []
+        for r in forced:
+            reward = usage_rows[r].copy()
+            if r in C: reward[C[r]] -= items[r]['output_quantity']
+            best = float(reward @ solve(-reward, reserved))
+            baseline = float(reward @ start)
+            tolerance = max(1e-5, abs(best) * 1e-8)
+            if best - baseline <= tolerance:
+                force_floor.append((-reward, -best + tolerance))
+            else:
+                rewards[r], offsets[r], force_scales[r] = reward, baseline, best - baseline
+        _, reserved = fair(force_scales, [*reserved, *force_floor], rewards, offsets)
     maxima = {}
     for r in {g['item_id'] for g in active if g['item_id'] in C}:
         objective = np.zeros(n); objective[C[r]] = -1
@@ -518,6 +568,8 @@ def _consume_map(catalog, primary, goals, areas, progress, source_choices, sourc
             counts[r] = count
             for child, q in items[r]['direct_ingredients'].items(): needed[child] += count * q * factor
         if any(q > stock[r] + 1e-6 for r, q in needed.items() if r not in C and r not in free and r not in automatic_external): return None
+        if any(sum(counts.get(c, 0) * items[c]['direct_ingredients'].get(r, 0) * factor for c in C) > q + 1e-6
+               for r, q in usage_limits.items()): return None
         return counts
     counts, retained = rounded(1), 1.
     if counts is None:

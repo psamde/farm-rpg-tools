@@ -1,5 +1,6 @@
 from pathlib import Path
 import unittest
+from unittest.mock import patch
 from farmdata import read_json
 from webapp import Application
 
@@ -38,3 +39,12 @@ class WebAppTests(unittest.TestCase):
         self.assertFalse(names & {'Iron', 'Nails', 'Small Screw', 'Small Spring', 'Shimmer Quartz', 'Coal'})
         ingredients = {ref for item in self.app.catalog['items'].values() if item['craftable'] for ref in item['direct_ingredients']}
         self.assertTrue(all(x['item_id'] in ingredients for x in data['passive_inputs']))
+
+    def test_more_than_twenty_primary_and_leftover_targets_are_accepted(self):
+        refs=[ref for ref,item in self.app.catalog['items'].items() if item['craftable']][:32]
+        payload=dict(targets={ref:1 for ref in refs},areas=['explore:7'],
+                     secondary=[dict(item_id=ref,cap=None,allow_exploration=False) for ref in refs])
+        with patch.object(self.app.pool,'submit') as submit:
+            job=self.app.submit(payload)
+            self.assertIn('job_id',job)
+            submit.assert_called_once()

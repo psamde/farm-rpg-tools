@@ -10,8 +10,8 @@ from planner import resolve
 
 
 def validate_secondary(catalog, rows):
-    if not isinstance(rows, list) or len(rows) > 20:
-        raise ValueError('Use at most 20 leftover targets.')
+    if not isinstance(rows, list):
+        raise ValueError('Leftover targets must be a list.')
     seen, result = set(), []
     for row in rows:
         if not isinstance(row, dict):
@@ -51,11 +51,11 @@ def validate_secondary(catalog, rows):
     return result
 
 
-def consume_leftovers(catalog, primary, requested, areas=None, max_areas=15, progress=None, defer_comparison=None, *, map_planning=False, map_sources=None, map_source_explores=None):
+def consume_leftovers(catalog, primary, requested, areas=None, max_areas=15, progress=None, defer_comparison=None, *, map_planning=False, map_sources=None, map_source_explores=None, map_node_usage=None):
     from balanced import consume
     goals = validate_secondary(catalog, requested)
     if not goals: return primary
-    return consume(catalog,primary,goals,areas,max_areas,progress,map_planning=map_planning,map_sources=map_sources,map_source_explores=map_source_explores)
+    return consume(catalog,primary,goals,areas,max_areas,progress,map_planning=map_planning,map_sources=map_sources,map_source_explores=map_source_explores,map_node_usage=map_node_usage)
 
 
 def _consume_priority_legacy(catalog, primary, requested, areas=None, max_areas=15, progress=None, defer_comparison=None):

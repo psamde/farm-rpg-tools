@@ -16,7 +16,7 @@ function settingIcons(){document.querySelectorAll('[data-setting-icon]').forEach
 
 let catalog, items={}, state, result=null, selected=0, consumers=[], revision=0, timer, lastSuccess=null;
 
-const defaults={map_planning:false,map_unused_mode:"top",map_unused_count:6,map_expanded_areas:[],map_sources:{},map_source_explores:null,map_node_usage:{},map_use_void:[],map_hidden:[],map_voided:[],tower_level:0,map_positions:{},guided_skipped:[],quest_selection:[],selected_plan:0,selected_plan_key:"",planner_mode:'goals',production_interval:60,passive_inventory:'{}',craftworks_slots:10,inventory_size:10000,route_method:'AP',route_foods:{},secondary:[],automatic_areas:null,theme:'dark',resource_saver:0,wanderer:0,lemon_squeezer:false,cinnamon:false,cider_rolls:{},effectiveness_upgrades:{},sprint_shoes:0,targets:{'167':1000},iron_depot:true,runecube:false,cockatrice_ether_source:false,cockatrice_ether_source:false,mode:'best',max_areas:15,areas:null,inventory:'{}'};
+const defaults={map_planning:false,map_unused_mode:"top",map_unused_count:6,map_expanded_areas:[],map_sources:{},map_source_explores:null,map_node_usage:{},map_use_void:[],map_hidden:[],map_voided:[],tower_level:0,map_positions:{},guided_skipped:[],quest_selection:[],quest_imported_items:{},selected_plan:0,selected_plan_key:"",planner_mode:'goals',production_interval:60,passive_inventory:'{}',craftworks_slots:10,inventory_size:10000,route_method:'AP',route_foods:{},secondary:[],automatic_areas:null,theme:'dark',resource_saver:0,wanderer:0,lemon_squeezer:false,cinnamon:false,cider_rolls:{},effectiveness_upgrades:{},sprint_shoes:0,targets:{'167':1000},iron_depot:true,runecube:false,cockatrice_ether_source:false,cockatrice_ether_source:false,mode:'best',max_areas:15,areas:null,inventory:'{}'};
 
 async function api(url,body){return browserPlanner.api(url,body);}
 
@@ -116,7 +116,7 @@ $('allAreas').onclick=()=>{state.areas=catalog.locations.map(a=>a.id);areas();ch
 
 $('compute').onclick=()=>{revision++;clearTimeout(timer);calculate();};
 
-async function calculate(){state.secondary=state.secondary.filter(r=>!state.targets[r.item_id]);const token=++revision;error('');if(state.planner_mode!=='passive'&&!Object.keys(state.targets).length){resetEmptyPlan();return;}let payload;try{payload={map_planning:state.map_planning===true,map_sources:state.map_sources||{},map_source_explores:state.map_source_explores,planner_mode:state.planner_mode,production_interval:state.production_interval,targets:state.planner_mode==='passive'?{}:{...state.targets},secondary:state.secondary.map(r=>state.map_planning?craftMapGoalIntent(items,state,r):r).map(r=>({item_id:r.item_id,allow_exploration:r.allow_exploration,cap:r.cap,prioritize:r.prioritize===true,automatic_batch:r.automatic_batch===true,user_cap:r.user_cap===true,consumer_mode:r.consumer_mode,demand_group:r.demand_group,demand_basis:r.demand_basis,demand_percent:r.demand_percent})),areas:[...state.areas],automatic_areas:state.automatic_areas?.filter(id=>state.areas.includes(id))||null,iron_depot:state.iron_depot,runecube:state.runecube,cockatrice_ether_source:state.cockatrice_ether_source,cockatrice_ether_source:state.cockatrice_ether_source,resource_saver:state.resource_saver,combinations_mode:state.mode==='combinations',inventory:inventoryData()};}catch{error('Starting inventory must be valid JSON, for example {"Wood": 100}.');$('status').textContent='Check starting inventory.';$('compute').disabled=false;$('status').classList.remove('loading');return;}
+async function calculate(){state.secondary=state.secondary.filter(r=>!state.targets[r.item_id]);const token=++revision;error('');if(state.planner_mode!=='passive'&&!Object.keys(state.targets).length){resetEmptyPlan();return;}let payload;try{payload={map_planning:state.map_planning===true,map_sources:state.map_sources||{},map_node_usage:state.map_node_usage||{},map_source_explores:state.map_source_explores,planner_mode:state.planner_mode,production_interval:state.production_interval,targets:state.planner_mode==='passive'?{}:{...state.targets},secondary:state.secondary.map(r=>state.map_planning?craftMapGoalIntent(items,state,r):r).map(r=>({item_id:r.item_id,allow_exploration:r.allow_exploration,cap:r.cap,prioritize:r.prioritize===true,automatic_batch:r.automatic_batch===true,user_cap:r.user_cap===true,consumer_mode:r.consumer_mode,demand_group:r.demand_group,demand_basis:r.demand_basis,demand_percent:r.demand_percent})),areas:[...state.areas],automatic_areas:state.automatic_areas?.filter(id=>state.areas.includes(id))||null,iron_depot:state.iron_depot,runecube:state.runecube,cockatrice_ether_source:state.cockatrice_ether_source,cockatrice_ether_source:state.cockatrice_ether_source,resource_saver:state.resource_saver,combinations_mode:state.mode==='combinations',inventory:inventoryData()};}catch{error('Starting inventory must be valid JSON, for example {"Wood": 100}.');$('status').textContent='Check starting inventory.';$('compute').disabled=false;$('status').classList.remove('loading');return;}
 
 const settingsKey=JSON.stringify({...payload,targets:null,secondary:null});$('compute').disabled=true;$('status').textContent='Finding exploration plans…';$('status').classList.add('loading');$('resultContent').classList.add('stale');try{let published=false;const {job_id}=await api('/api/plan',payload);while(token===revision){const job=await api('/api/jobs/'+job_id);if(job.status==='error')throw Error(job.error);if(job.status==='complete'||job.status==='comparisons'){if(published){result=job.result;for(const row of result.plans[selected].secondary?.targets||[]){const label=document.querySelector(`[data-leftover-id="${row.item_id}"] .leftover-amount small`);if(label)label.textContent=comparisonLabel(row);}if(job.status==='complete')return;await new Promise(r=>setTimeout(r,500));continue;}published=true;result=job.result;selected=restorePlanChoice(result.plans,state);if(state.map_planning&&state.map_source_explores==null&&result.plans[selected]?.map_source_explores)state.map_source_explores=result.plans[selected].map_source_explores;rememberPlanChoice();const best=result.plans[0].optimal_total_explores;const delta=lastSuccess&&lastSuccess.settingsKey===settingsKey?best-lastSuccess.best:null;render(delta);lastSuccess={best,settingsKey};$('status').textContent='Plan ready';$('compute').disabled=false;$('status').classList.remove('loading');if(job.status==='complete')return;await new Promise(r=>setTimeout(r,500));continue;}$('status').textContent=job.total?'Calculating your route…':(job.message||'Optimizing shared ingredients…');await new Promise(r=>setTimeout(r,500));}}catch(e){if(token===revision){error(e.message.split(/\n/).filter(Boolean).at(-1).replace(/^(?:planner\.)?(?:InfeasiblePlan|ValueError): /,''));$('status').textContent='Could not calculate this plan. Adjust targets, inventory, or areas.';}}finally{if(token===revision){$('compute').disabled=false;$('status').classList.remove('loading');}}}
 
@@ -195,7 +195,7 @@ function summaryCosts(){const open=$('summaryCosts').querySelector('.costreport'
 
 
 function explorationIngredients(id){const seen=new Set();function visit(ref){for(const child of Object.keys(items[ref]?.direct_ingredients||{})){if(seen.has(child))continue;seen.add(child);visit(child);}}visit(id);return [...seen];}
-function addSecondary(id,ingredient=null){if(state.targets[id])throw Error('This item is already a primary target.');if(!items[id]?.craftable)throw Error('Choose a craftable item.');if(state.secondary.some(r=>r.item_id===id))return;if(state.secondary.length>=20)throw Error('Use at most 20 leftover targets.');state.secondary.push({item_id:id,allow_exploration:false,cap:null,exploration_item_id:ingredient});changed();}
+function addSecondary(id,ingredient=null){if(state.targets[id])throw Error('This item is already a primary target.');if(!items[id]?.craftable)throw Error('Choose a craftable item.');if(state.secondary.some(r=>r.item_id===id))return;state.secondary.push({item_id:id,allow_exploration:false,cap:null,exploration_item_id:ingredient});changed();}
 
 function leftoverBottleneck(goal,row,plan){
  if(!row||!plan?.item_balances||(goal.cap!=null&&row.crafts>=goal.cap))return null;
@@ -252,7 +252,7 @@ $('planNeeds').onclick=()=>{
  goal.allow_exploration=true;
  // The parent's recipe already includes this ingredient in the shared solver.
  // Listing it also makes its crafting output visible without reserving it.
- if(items[n.id].craftable&&!state.targets[n.id]&&!state.secondary.some(g=>g.item_id===n.id)&&state.secondary.length<20)
+ if(items[n.id].craftable&&!state.targets[n.id]&&!state.secondary.some(g=>g.item_id===n.id))
   state.secondary.push({item_id:n.id,allow_exploration:false,cap:null,exploration_item_id:null});
  $('needsDialog').close();pendingNeed=null;changed();
 };
@@ -349,6 +349,7 @@ function validatePlanSettings(input){
  if(!Array.isArray(out.map_voided)||out.map_voided.some(id=>typeof id!=='string'))fail('Invalid voided materials');
  if(!Array.isArray(out.guided_skipped)||out.guided_skipped.some(id=>typeof id!=='string'))fail('Invalid skipped materials');
  if(!Array.isArray(out.quest_selection)||out.quest_selection.some(id=>typeof id!=='string'))fail('Invalid quest selection');
+ if(!object(out.quest_imported_items)||Object.values(out.quest_imported_items).some(ids=>!Array.isArray(ids)||ids.some(id=>typeof id!=='string')))fail('Invalid quest imports');
  if(!Number.isInteger(out.selected_plan)||out.selected_plan<0||out.selected_plan>100000||typeof out.selected_plan_key!=='string'||out.selected_plan_key.length>2000)fail('Invalid selected plan');
  if(!out.map_positions||typeof out.map_positions!=='object'||Array.isArray(out.map_positions)||Object.values(out.map_positions).some(p=>!p||!Number.isFinite(p.x)||!Number.isFinite(p.y)||p.x<0||p.y<0||p.x>1000000||p.y>1000000))fail('Invalid map positions');
  const ranges={tower_level:[0,10000],craftworks_slots:[1,100],inventory_size:[1,1000000000],resource_saver:[0,45],wanderer:[0,33],sprint_shoes:[0,3]};
@@ -357,9 +358,9 @@ function validatePlanSettings(input){
  for(const [k,values] of Object.entries({planner_mode:['goals','passive'],theme:['dark','light'],route_method:['AP','Cider'],mode:['best','combinations']}))if(!values.includes(out[k]))fail('Invalid '+k);
  if(out.automatic_areas!==null&&(!Array.isArray(out.automatic_areas)||out.automatic_areas.some(id=>typeof id!=='string'||!catalog.locations.some(a=>a.id===id))))fail('Invalid automatic exploration locations');
  if(out.max_areas!==null&&(!Number.isInteger(out.max_areas)||out.max_areas<1||out.max_areas>15))fail('Invalid area limit');
- if(!object(out.targets)||Object.keys(out.targets).length>20)fail('Use at most 20 targets');
+ if(!object(out.targets))fail('Invalid targets');
  for(const [id,n] of Object.entries(out.targets))if(!eligibleTarget(items[id])||!Number.isInteger(n)||n<1||n>100000000)fail('Invalid target '+id);
- if(!Array.isArray(out.secondary)||out.secondary.length>20)fail('Invalid leftover targets');const seen=new Set();
+ if(!Array.isArray(out.secondary))fail('Invalid leftover targets');const seen=new Set();
  for(const r of out.secondary){if(!object(r)||!items[r.item_id]?.craftable||seen.has(r.item_id)||typeof r.allow_exploration!=='boolean'||r.cap!=null&&(!Number.isInteger(r.cap)||r.cap<0||r.cap>100000000))fail('Invalid leftover target');if(r.consumer_mode!=null&&!['available','fixed'].includes(r.consumer_mode))fail('Invalid craft mode');if(r.user_cap!=null&&typeof r.user_cap!=='boolean')fail('Invalid craft limit');if(r.automatic_batch!=null&&typeof r.automatic_batch!=='boolean')fail('Invalid automatic batch');if(r.prioritize!=null&&typeof r.prioritize!=='boolean')fail('Invalid priority option');if(r.exploration_item_id!=null&&!explorationIngredients(r.item_id).includes(r.exploration_item_id))fail('Invalid exploration ingredient');seen.add(r.item_id);}
  if(out.areas!==null&&(!Array.isArray(out.areas)||!out.areas.length||out.areas.some(id=>!catalog.locations.some(a=>a.id===id))))fail('Invalid areas');
  for(const k of ['effectiveness_upgrades','cider_rolls']){if(!object(out[k]))fail('Invalid '+k);for(const [id,n] of Object.entries(out[k]))if(!catalog.locations.some(a=>a.id===id)||!Number.isFinite(n)||n<0||n>100000000)fail('Invalid '+k);}
@@ -377,7 +378,7 @@ $('clearPlan').onclick=()=>{if(state)$('clearPlanDialog').showModal();};
 $('cancelClearPlan').onclick=()=>$('clearPlanDialog').close();
 $('confirmClearPlan').onclick=()=>{
  clearTimeout(timer);revision++;
- state.targets={};state.secondary=[];state.map_planning=false;state.automatic_areas=null;state.guided_skipped=[];state.map_voided=[];state.map_use_void=[];state.map_sources={};state.map_source_explores={};state.map_node_usage={};state.map_hidden=[];state.map_expanded_areas=[];state.map_unused_mode='top';state.quest_selection=[];state.inventory='{}';state.passive_inventory='{}';
+ state.targets={};state.secondary=[];state.map_planning=false;state.automatic_areas=null;state.guided_skipped=[];state.map_voided=[];state.map_use_void=[];state.map_sources={};state.map_source_explores={};state.map_node_usage={};state.map_hidden=[];state.map_expanded_areas=[];state.map_unused_mode='top';state.quest_selection=[];state.quest_imported_items={};state.inventory='{}';state.passive_inventory='{}';
  $('clearPlanDialog').close();error('');$('inventoryError').hidden=true;
  for(const id of ['itemInput','inventoryItem','planCode'])$(id).value='';
  $('planCodeStatus').textContent='';targets();inventoryRows();resetEmptyPlan();
@@ -441,7 +442,7 @@ function openSuggestions(material){$('suggestionsTitle').textContent=material?'S
 $('closeSuggestions').onclick=()=>$('suggestionsDialog').close();
 for(const host of [$('suggestionResults')])host.addEventListener('click',e=>{
  const button=e.target.closest('[data-suggestion]');if(!button)return;
- try{if(state.secondary.length>=20)throw Error('Use at most 20 leftover targets.');
+ try{
  if(state.targets[button.dataset.suggestion])throw Error('This item is already a primary target.');
  if(!state.secondary.some(g=>g.item_id===button.dataset.suggestion))state.secondary.push({item_id:button.dataset.suggestion,allow_exploration:button.dataset.assist==='true',cap:null,exploration_item_id:button.dataset.anchor||null});
  $('suggestionsDialog').close();$('consumerDialog').close();changed();}catch(err){error(err.message);}

@@ -1,0 +1,48 @@
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
+const source=fs.readFileSync('web/guided.js','utf8').split("/* Quests share Buddy Farm's native questline/step grouping. */")[1];
+const clone=x=>JSON.parse(JSON.stringify(x));
+const q1={id:'q1',name:'Test I',silver:5,items:[{id:'wood',quantity:10},{id:'board',quantity:20},{id:'fish',quantity:99}]};
+const q2={id:'q2',name:'Test II',silver:10,items:[{id:'wood',quantity:30},{id:'stone',quantity:40}]};
+function harness(saved={}){
+ const elements=new Map();const $=id=>{if(!elements.has(id))elements.set(id,{value:'',innerHTML:'',textContent:'',hidden:false,disabled:false,setAttribute(){},insertBefore(){},querySelector(){}});return elements.get(id);};
+ const listeners={};let changes=0;
+ const ctx=vm.createContext({$,document:{createElement:()=>({})},window:{addEventListener:(key,fn)=>listeners[key]=fn},state:{targets:{wood:2},quest_selection:[],quest_imported_items:{},...clone(saved)},items:{wood:{name:'Wood',explorable:true},board:{name:'Board',craftable:true},stone:{name:'Stone',explorable:true},fish:{name:'Fish'}},esc:String,fmt:String,itemName:(id,name)=>name,eligibleTarget:i=>!!(i&&(i.craftable||i.explorable)),targets(){},changed(){changes++;}});
+ vm.runInContext(source,ctx);
+ const set=s=>vm.runInContext(s,ctx);
+ set(`questData=${JSON.stringify({questlines:[{id:'line',quests:[q1,q2]},{id:'duplicate',quests:[q1]}]})};questChosen=new Set(['q1','q2']);`);
+ return{ctx,$,set,read:s=>JSON.parse(set(`JSON.stringify(${s})`)),listeners,changes:()=>changes};
+}
+const h=harness();
+h.set('renderQuestRequirements()');
+assert.deepEqual(h.read('selectedQuestRequirements().required'),{wood:40,board:20,fish:99,stone:40});
+assert.equal(h.read('selectedQuestRequirements().silver'),15,'deduplicate quests listed in multiple groups');
+assert.match(h.$('questRequirements').innerHTML,/data-quest-item="fish"[^>]*disabled/);
+h.$('questRequirements').onchange({target:{dataset:{questItem:'wood'},checked:false}});
+h.$('addQuestTargets').onclick();
+assert.deepEqual(h.read('state.targets'),{wood:2,board:20,stone:40});
+assert.deepEqual(h.read('state.quest_imported_items'),{q1:['board'],q2:['stone']});
+assert.equal(h.$('addQuestTargets').disabled,true,'unselected remainder is not silently imported');
+assert.deepEqual(h.read('selectedQuestRequirements(true).required'),{wood:40,fish:99});
+h.$('questRequirements').onchange({target:{dataset:{questItem:'wood'},checked:true}});
+h.$('addQuestTargets').onclick();
+assert.deepEqual(h.read('state.targets'),{wood:42,board:20,stone:40});
+assert.equal(h.changes(),2);
+h.$('addQuestTargets').onclick();assert.equal(h.changes(),2,'repeat import is a no-op');
+// A save/reload after a partial import must retain the skipped requirements.
+const restored=harness({targets:{wood:2,board:20},quest_selection:['q1'],quest_imported_items:{q1:['board']}});
+assert.deepEqual(restored.read('selectedQuestRequirements(true).required'),{wood:40,fish:99,stone:40});
+restored.$('addQuestTargets').onclick();assert.deepEqual(restored.read('state.targets'),{wood:42,board:20,stone:40});
+const legacy=harness({quest_selection:['q1']});
+assert.deepEqual(legacy.read('selectedQuestRequirements(true).required'),{wood:30,stone:40});
+legacy.$('questRequirements').onclick({target:{closest:()=>({dataset:{questItems:'none'}})}});assert.equal(legacy.$('addQuestTargets').disabled,true);
+legacy.$('questRequirements').onclick({target:{closest:()=>({dataset:{questItems:'all'}})}});assert.equal(legacy.$('addQuestTargets').disabled,false);
+legacy.$('addQuestTargets').onclick();assert.deepEqual(legacy.read('state.targets'),{wood:32,stone:40});
+const big=harness();const bulkItems=Array.from({length:32},(_,n)=>({id:'item'+n,quantity:n+1}));
+for(const item of bulkItems)big.ctx.items[item.id]={name:item.id,craftable:true};
+big.set(`questData={questlines:[{id:'large',quests:[{id:'large',silver:0,items:${JSON.stringify(bulkItems)}}]}]};questChosen=new Set(['large']);renderQuestRequirements();`);
+assert.equal(big.read('selectedQuestItemIds().length'),32);big.$('addQuestTargets').onclick();assert.equal(Object.keys(big.read('state.targets')).length,33);
+const overflow=harness({targets:{board:100000000}});overflow.$('addQuestTargets').onclick();
+assert.deepEqual(overflow.read('state.quest_imported_items'),{});assert.deepEqual(overflow.read('state.quest_selection'),[]);
+assert.equal(overflow.changes(),0);assert.match(overflow.$('questStatus').textContent,/exceed 100 million/);
+h.listeners['planner-cleared']();assert.equal(h.read('questChosen.size'),0);assert.equal(h.read('questItemExcluded.size'),0);
+console.log('Quest item selection: partial/repeated imports, shared items, legacy saves, bulk controls and 32-item imports passed.');

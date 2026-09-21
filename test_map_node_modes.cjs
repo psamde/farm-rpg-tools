@@ -1,6 +1,6 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
 const source=fs.readFileSync('web/craft-map.js','utf8');
-const handlers=source.slice(source.indexOf(' function updateConsumer('),source.indexOf(" if($('mapExploreInstead'))"));
+const handlers=source.slice(source.indexOf(' function finishUsageChange('),source.indexOf(" if($('mapExploreInstead'))"));
 const goalAdapter=source.slice(source.indexOf('function mapGoals()'),source.indexOf('function mapQueuePreview()'));
 function fixture(applied=false){
  const elements=new Map();const $=id=>{if(!elements.has(id))elements.set(id,{value:id==='mapRawLimit'?'5000':undefined});return elements.get(id);};
@@ -16,14 +16,21 @@ function fixture(applied=false){
  return {ctx,$,previews:()=>previews,get:expr=>vm.runInContext(expr,ctx)};
 }
 for(const applied of [false,true]){
- const f=fixture(applied);
- assert.equal(f.get('mapRequestGoals()[0].cap'),null,'legacy availability estimate must not cap an uncapped Use + Void goal');
- f.$('mapRawSetLimit').onclick();assert.equal(f.get('mapDrafts[0].cap'),2500);assert.equal(f.get('mapDrafts[0].allow_exploration'),false);assert.equal(f.get('mapDrafts[0].consumer_mode'),'available');assert.equal(f.get('mapDrafts[0].user_cap'),true);assert.equal(f.get('mapRequestGoals()[0].cap'),2500);
- f.get("setSurplusMode('void')");assert.equal(f.get('mapDrafts[0].cap'),2500,'pausing a source must preserve the saved consumer limit');assert.equal(f.get('mapDrafts[0].consumer_mode'),'available');assert.equal(f.get('mapRequestGoals()[0].cap'),0);assert.equal(f.get("state.map_voided.includes('amethyst')"),true);
- f.get("setSurplusMode('use')");assert.equal(f.get('mapRequestGoals()[0].cap'),2500,'resume the previous user limit');assert.equal(f.get('mapDrafts[0].user_cap'),true);
- f.get("setSurplusMode('unused')");assert.equal(f.get('mapDrafts[0].cap'),2500);assert.equal(f.get('mapRequestGoals()[0].cap'),0);assert.equal(f.get('state.map_voided.length'),0);
- f.$('mapRawForce').onclick();assert.equal(f.get('mapDrafts[0].cap'),6000);assert.equal(f.get('mapRequestGoals()[0].consumer_mode'),'fixed');assert.equal(f.get('mapRequestGoals()[0].user_cap'),false);
- assert.equal(f.previews(),5,'every mode action queues recomputation, including applied consumers');
+ const f=fixture(applied),original=f.get('JSON.stringify(mapGoals())');
+ assert.equal(f.get('mapRequestGoals()[0].cap'),null);
+ f.$('mapRawSetLimit').onclick();
+ assert.equal(f.get("state.map_node_usage.amethyst.mode"),'limit');
+ assert.equal(f.get("state.map_node_usage.amethyst.amount"),5000);
+ assert.equal(f.get('mapRequestGoals()[0].cap'),null,'aggregate material limit must not become a per-recipe cap');
+ f.get("setSurplusMode('void')");assert.equal(f.get('mapRequestGoals()[0].cap'),0);
+ f.get("setSurplusMode('use')");assert.equal(f.get('mapRequestGoals()[0].cap'),null);
+ f.get("setSurplusMode('unused')");assert.equal(f.get('mapRequestGoals()[0].cap'),0);
+ f.$('mapRawForce').onclick();
+ assert.equal(f.get("state.map_node_usage.amethyst.mode"),'force');
+ assert.equal(f.get('mapRequestGoals()[0].consumer_mode'),'available');
+ assert.equal(f.get('mapRequestGoals()[0].cap'),null,'force the input usage without changing downstream recipes');
+ assert.equal(f.get('JSON.stringify(mapGoals())'),original,'all node mode changes preserve consumer intent');
+ assert.equal(f.previews(),5);
 }
 const f=fixture();f.get("consumers.push({item_id:'ring',cap:50,consumer_mode:'fixed'});mapDrafts.push(consumers[1],{item_id:'bow',cap:25,consumer_mode:'fixed'});setSurplusMode('void')");
 assert.equal(f.get('mapDrafts[0].cap'),10000);assert.equal(f.get('mapDrafts[1].cap'),50);assert.equal(f.get('mapRequestGoals().slice(0,2).every(g=>g.cap===0)'),true);assert.equal(f.get('mapRequestGoals()[2].cap'),25,'unrelated consumers must not be paused');

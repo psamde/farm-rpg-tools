@@ -68,8 +68,6 @@ class Application:
             raise ValueError('Add at least one target with a positive craft quantity.')
         if payload.get('planner_mode','goals') not in ('goals','passive') or payload.get('production_interval',60) not in (10,60):
             raise ValueError('Invalid production mode or interval.')
-        if len(payload['targets']) > 20:
-            raise ValueError('Please use at most 20 targets per plan.')
         for key, count in payload['targets'].items():
             if type(count) is not int or not 1 <= count <= 100000000:
                 raise ValueError('Craft quantities must be whole numbers from 1 to 100,000,000.')
@@ -122,7 +120,7 @@ class Application:
             if payload.get('secondary'):
                 for i, primary in enumerate(result['plans']):
                     progress(job['done'], job['total'])
-                    result['plans'][i] = consume_leftovers(catalog, primary, payload['secondary'], areas=payload['areas'], max_areas=len(self.catalog['locations']), progress=lambda: progress(job['done'], job['total']))
+                    result['plans'][i] = consume_leftovers(catalog, primary, payload['secondary'], areas=payload['areas'], max_areas=len(self.catalog['locations']), progress=lambda: progress(job['done'], job['total']), map_planning=payload.get('map_planning',False), map_sources=payload.get('map_sources'), map_source_explores=payload.get('map_source_explores'), map_node_usage=payload.get('map_node_usage'))
             result['plans'].sort(key=lambda p: (p['optimal_total_explores'], len(p['areas'])))
             unique = {}
             for p in result['plans']:

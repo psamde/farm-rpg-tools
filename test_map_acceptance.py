@@ -172,6 +172,83 @@ class MapAcceptanceTests(unittest.TestCase):
         preview=guided_compute(self.catalog,dict(payload,inventory=watch,replacement_goals=payload['secondary']))['preview_plan']
         self.assertEqual(self.counts(preview),self.counts(auto))
 
+    def test_more_than_twenty_explicit_recipes_compute(self):
+        names=[item['name'] for item in self.catalog['items'].values() if item['craftable']][:32]
+        stock={ref:10000000 for ref,item in self.catalog['items'].items() if not item['craftable']}
+        goals=[dict(self.goal(name),cap=10,user_cap=True) for name in names]
+        result=compute(self.catalog,dict(self.payload,inventory=stock,secondary=goals,map_source_explores={}))['plans'][0]
+        self.assertEqual(len(result['secondary']['targets']),32)
+        self.assertGreater(sum(t['crafts']>0 for t in result['secondary']['targets']),20)
+        self.conserve(result)
+
+    def copper_payload(self):
+        routes=[('Coal','explore:8',511980),('Emberstone','explore:9',3089731),
+                ('Mushroom','explore:7',590652),('Bone','explore:1',110791),
+                ('Purple Flower','explore:3',9941462),('Blue Gel','explore:10',3231339)]
+        return dict(self.payload, targets={self.ids['Langstaff Crest']:163},
+            areas=['explore:13',*[a for _,a,_ in routes]],
+            map_sources={self.ids[r]:[a] for r,a,_ in routes},
+            map_source_explores={self.ids[r]:{a:q} for r,a,q in routes},
+            inventory={self.ids[r]:q for r,q in [('Corn',758223),('Pocket Watch',9759),
+                       ('Small Gear',9759),('Small Screw',87828),('Small Spring',29276)]},
+            secondary=[self.goal(n) for n in ['Spool of Copper','Energy Coil','Spiky Bracelet',
+                       'Machine Press','Belt Drive','Pear Grease','Hourglass','Corn Oil','Engine']])
+
+    def test_force_wire_preserves_choices_and_uses_the_actual_shared_pool(self):
+        payload=self.copper_payload(); original=copy.deepcopy(payload)
+        before=compute(self.catalog,payload)['plans'][0]
+        wire=self.ids['Copper Wire']
+        forced=dict(payload,map_node_usage={wire:{'mode':'force'}})
+        after=compute(self.catalog,forced)['plans'][0]
+        def balance(plan, name):
+            return next(b for b in plan['item_balances'] if b['name']==name)
+        self.assertGreaterEqual(balance(after,'Copper Wire')['used_by_leftover_craft'],
+                                balance(before,'Copper Wire')['used_by_leftover_craft'])
+        self.assertLess(balance(after,'Copper Wire')['expected_unused'],7000)
+        self.assertGreater(self.counts(after)['Spool of Copper'],18000)
+        self.assertEqual(after['optimal_total_explores'],before['optimal_total_explores'])
+        self.assertEqual(payload,original)
+        self.assertTrue(all(g['cap'] is None for g in after['secondary']['targets']))
+        # Power Monitor is only an implicit Engine input. Do not credit fake
+        # surplus production that disappears when LP quantities are rounded.
+        self.assertLess(balance(after,'Power Monitor')['expected_unused'],1)
+        self.assertLess(balance(after,'Coal')['expected_unused'],5)
+        self.conserve(after)
+        preview=guided_compute(self.catalog,dict(forced,previous_map_node_usage={},
+                            replacement_goals=payload['secondary']))
+        self.assertEqual(self.counts(preview['preview_plan']),self.counts(after))
+        reduced={r['item_id']:r['before'] for r in preview['reduced']}
+        self.assertEqual(reduced[self.ids['Corn Oil']],self.counts(before)['Corn Oil'])
+        restored=compute(self.catalog,json.loads(json.dumps(forced)))['plans'][0]
+        self.assertEqual(self.counts(restored),self.counts(after))
+        resumed=compute(self.catalog,dict(payload,map_node_usage={wire:{'mode':'use'}}))['plans'][0]
+        self.assertEqual(self.counts(resumed),self.counts(before))
+
+    def test_material_limit_is_aggregate_and_counts_every_consumption_edge_once(self):
+        payload=self.copper_payload();wire=self.ids['Copper Wire'];coal=self.ids['Coal']
+        for limit in [0,5000,100000]:
+            with self.subTest(limit=limit):
+                result=compute(self.catalog,dict(payload,map_node_usage={wire:{'mode':'limit','amount':limit}}))['plans'][0]
+                b=next(b for b in result['item_balances'] if b['item_id']==wire)
+                self.assertLessEqual(b['used_by_leftover_craft'],limit+1e-6)
+                self.assertGreater(b['used_by_leftover_craft'],max(-1,limit-15))
+                self.conserve(result)
+        # Forcing one material never bypasses another material's explicit limit.
+        result=compute(self.catalog,dict(payload,map_node_usage={wire:{'mode':'force'},coal:{'mode':'limit','amount':10000}}))['plans'][0]
+        self.assertLessEqual(next(b['used_by_leftover_craft'] for b in result['item_balances'] if b['item_id']==coal),10000+1e-6)
+        self.conserve(result)
+
+    def test_multiple_forced_inputs_share_progress_and_respect_fixed_crafts(self):
+        payload=self.copper_payload();payload['secondary'][-1].update(cap=200,consumer_mode='fixed')
+        rules={self.ids[name]:{'mode':'force'} for name in ['Copper Wire','Carbon Sphere']}
+        a=compute(self.catalog,dict(payload,map_node_usage=rules))['plans'][0]
+        b=compute(self.catalog,dict(payload,map_node_usage=dict(reversed(list(rules.items())))))['plans'][0]
+        self.assertEqual(self.counts(a),self.counts(b))
+        self.assertGreaterEqual(self.counts(a)['Engine'],199)
+        self.assertLessEqual(self.counts(a)['Engine'],200)
+        self.assertGreater(self.counts(a)['Corn Oil'],0)
+        self.conserve(a)
+
     def test_all_six_diary_orders_have_the_same_balanced_result(self):
         expected = None
         for permutation in itertools.permutations(self.diaries):

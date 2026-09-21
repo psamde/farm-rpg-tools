@@ -25,6 +25,10 @@ async function run(){
  assert.equal(resumed.secondary[0].cap,null,'resuming Straw restores the original uncapped recipe');
  assert.equal(vm.runInContext('mapGoalIntent(state.secondary[0]).cap',context),null);
  assert.equal(state.secondary[0].cap,null,'request limits do not overwrite saved intent');
+ state.map_node_usage[id('Straw')]={mode:'limit',amount:5000};
+ const limited=await context.calculate();
+ assert.equal(limited.map_node_usage[id('Straw')].amount,5000);
+ assert.equal(limited.secondary[0].cap,null,'reload sends material limits independently of recipe caps');
  console.log('Initial load and map previews share identical node rules; Straw blocks Spear until resumed.');
 }
 run().catch(e=>{console.error(e);process.exitCode=1;});

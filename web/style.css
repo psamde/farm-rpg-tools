@@ -423,3 +423,17 @@ dialog,#suggestionsDialog{position:fixed;inset:0;margin:auto;max-height:calc(100
 .modebuttons button:disabled{opacity:.4;cursor:not-allowed;filter:grayscale(1)}
 
 .seasonal-zones-heading{grid-column:1 / -1;border-top:1px solid var(--line);padding-top:16px;margin-top:6px}.seasonal-zones-heading h3{font-size:14px;margin:0 0 4px}.seasonal-zones-heading .hint{margin:0}
+
+/* Select individual quest requirements without losing skipped imports. */
+.quest-import-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:18px}
+.quest-import-heading h3,.quest-import-heading .quest-bulk{margin:0}
+.quest-requirements-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:6px 16px;margin:12px 0}
+.quest-picker .quest-requirement{display:grid;grid-template-columns:18px minmax(0,1fr) auto;align-items:center;gap:10px;min-height:48px;padding:8px 10px;margin:0;border:1px solid var(--line);border-radius:8px;cursor:pointer}
+.quest-requirement input{width:18px;height:18px;margin:0;accent-color:var(--green)}
+.quest-requirement .quest-item-name{min-width:0}.quest-requirement .quest-item-name>.itemlabel{white-space:normal}
+.quest-requirement .quest-item-name small{display:block;font-size:11px;line-height:1.3;margin-top:4px;color:var(--muted)}
+.quest-requirement strong{font-size:13px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.quest-requirement:has(input:focus-visible){outline:2px solid var(--green);outline-offset:2px}
+.quest-requirement:has(input:checked){border-color:var(--green)}
+.quest-requirement.is-unavailable{cursor:default;opacity:.65}
+@media(max-width:600px){.quest-picker .quest-import-heading .quest-bulk button{min-height:40px}.quest-requirements-list{grid-template-columns:1fr}}

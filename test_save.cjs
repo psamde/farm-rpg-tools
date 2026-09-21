@@ -91,3 +91,12 @@ console.log('Map source selections, paused nodes, fixed goals, explicit soft lim
 assert.equal(restoredMap.map_source_explores.raw.area,1234);
 assert.equal(oldMap.map_source_explores,null);
 assert.throws(()=>c.decodePlanCode(c.encodePlanCode({...mapSave,map_source_explores:{raw:{area:-1}}})));
+
+const largeIds=Array.from({length:64},(_,i)=>'extra'+i);
+for(const id of largeIds)c.items[id]={craftable:true,direct_ingredients:{raw:1},output_quantity:1};
+const largeSave={...input,targets:Object.fromEntries(largeIds.map(id=>[id,10])),secondary:largeIds.map(item_id=>({item_id,cap:null,allow_exploration:false})),quest_selection:['quest'],quest_imported_items:{quest:['raw']}};
+const loadedLarge=c.decodePlanCode(c.encodePlanCode(largeSave));
+assert.equal(Object.keys(loadedLarge.targets).length,64);assert.equal(loadedLarge.secondary.length,64);
+assert.deepEqual(Array.from(loadedLarge.quest_imported_items.quest),['raw']);
+assert.throws(()=>c.decodePlanCode(c.encodePlanCode({...largeSave,quest_imported_items:{quest:'bad'}})));
+console.log('64-item plans and partial quest imports survive save/load without count limits.');

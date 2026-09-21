@@ -106,7 +106,11 @@ test('forcing one branch and sharing its common ingredient preserve neighboring 
  h.state.map_node_usage[ids['Fern Leaf']]={mode:'use'};h.state.map_node_usage[ids.Feathers]={mode:'use'};
  h.set(`mapSelect(${JSON.stringify(ids['Purple Flower'])});`);h.el('mapRawForce').onclick();
  const forced=h.read(`mapGoals().find(g=>g.item_id===${JSON.stringify(ids['Purple Diary'])})`);
- assert.equal(forced.consumer_mode,'fixed');assert.ok(forced.cap>0);
+ assert.equal(forced.consumer_mode,'available');assert.equal(forced.cap,null);
+ assert.equal(h.state.map_node_usage[ids['Purple Flower']].mode,'force');
+ // A separately requested fixed craft still keeps its quantity during sharing.
+ forced.consumer_mode='fixed';forced.cap=300;
+ h.set(`Object.assign(mapGoals().find(g=>g.item_id==='${ids['Purple Diary']}'),${JSON.stringify(forced)});`);
  for(const name of ['Green Diary','Leather Diary'])assert.equal(h.read(`mapGoals().find(g=>g.item_id===${JSON.stringify(ids[name])}).consumer_mode`),'available');
  assert.deepEqual(copy(h.state.map_node_usage[ids['Fern Leaf']]),{mode:'use'});assert.deepEqual(copy(h.state.map_node_usage[ids.Feathers]),{mode:'use'});
  h.set(`mapSelect(${JSON.stringify(ids.Mushroom)});mapPotential={goals:${JSON.stringify([{item_id:ids['Purple Diary'],cap:forced.cap},{item_id:ids['Green Diary'],cap:200},{item_id:ids['Leather Diary'],cap:100}])}};`);
@@ -186,5 +190,28 @@ test('external soft ingredients expose inventory supply without offering nonexis
   assert.equal(Object.hasOwn(JSON.parse(h.state.inventory),ref),false);
   assert.equal(h.read(`mapGraph.nodes.find(n=>n.id===${JSON.stringify(ref)}).autoSupply`),true);
  }
+});
+test('forcing or limiting a node sends one material rule and preserves all consumer choices',async()=>{
+ const h=harness();h.set('mapRender();');h.seed([available('Purple Diary'),available('Green Diary')]);
+ h.state.map_node_usage[ids.Mushroom]={mode:'use'};
+ const before=h.read('mapGoals()');
+ h.set(`mapSelect('${ids.Mushroom}')`);h.el('mapRawForce').onclick();
+ assert.deepEqual(h.read('mapGoals()'),before);
+ await h.set('mapComputePreview(false)');
+ let req=h.requests.at(-1);
+ assert.deepEqual(req.map_node_usage[ids.Mushroom],{mode:'force',amount:null});
+ assert.deepEqual(req.previous_map_node_usage[ids.Mushroom],{mode:'use'});
+ assert(req.replacement_goals.every(g=>g.consumer_mode==='available'&&g.cap===null));
+ h.el('mapRawLimit').value='5000';h.el('mapRawSetLimit').onclick();
+ await h.set('mapComputePreview(false)');req=h.requests.at(-1);
+ assert.deepEqual(req.map_node_usage[ids.Mushroom],{mode:'limit',amount:5000});
+ assert.deepEqual(h.read('mapGoals()'),before);
+});
+test('the crafting map accepts more than twenty explicit recipes',async()=>{
+ const h=harness();h.set('mapRender();');
+ const many=Object.values(items).filter(i=>i.craftable&&i.id!==ids['Purple Diary']).slice(0,25).map(i=>({item_id:i.id,cap:null,consumer_mode:'available'}));
+ h.seed(many);await h.add('Purple Diary','Purple Flower');
+ assert.equal(h.read('mapGoals().length'),26);
+ assert(h.read('mapGoals()').some(g=>g.item_id===ids['Purple Diary']));
 });
 (async()=>{let failures=0;for(const [name,fn] of cases){try{await fn();console.log('PASS '+name);}catch(e){failures++;console.error('FAIL '+name+'\n'+e.stack);}}if(failures)process.exitCode=1;else console.log('Map workflow interaction regressions passed.');})();
