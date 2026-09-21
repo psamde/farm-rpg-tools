@@ -61,3 +61,5 @@ html[data-theme=dark] .map-choice-availability.ready{color:#9cd4ad}
 
 .map-node .map-port{display:flex;align-items:center;justify-content:center;padding:0;line-height:1;text-indent:0;box-sizing:border-box}
 .map-source-coverage{display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-top:5px}
+
+.map-node-label{flex-wrap:wrap}.map-node-label>.mailablebadge{font-size:8px;padding:2px 4px}

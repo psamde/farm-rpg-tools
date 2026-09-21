@@ -20,7 +20,7 @@ ENDPOINT = "https://api.buddy.farm/graphql"
 REPOSITORY = "https://github.com/coderanger/buddy.farm"
 QUERIES = {
     "recipes": """{ items { id name image type canCraft canCook craftingLevel
-        canBuy buyPrice canMail canFleaMarket fleaMarketPrice fleaMarketRotate
+        canBuy buyPrice canMail minMailableLevel canFleaMarket fleaMarketPrice fleaMarketRotate
         recipeItems { quantity ingredientItem { id name } }
     } }""",
     "drops": """{ items { id manualFishingOnly dropRatesItems {
@@ -254,6 +254,7 @@ def process(snapshot):
             "image": row.get("image"), "type": row.get("type"),
             "craftable": row["canCraft"], "cookable": row.get("canCook", False),
             "crafting_level": row.get("craftingLevel"),
+            "min_mailable_level": row.get("minMailableLevel"),
             "output_quantity": 1, "direct_ingredients": recipes[item_id],
             "raw_materials": materials, "craft_counts": crafts,
             "source_ids": sorted(source_ids), "manual_fishing_only": row.get("manualFishingOnly"),

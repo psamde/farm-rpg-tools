@@ -1,0 +1,2225 @@
+{
+  "fetched_at": "2026-09-21",
+  "source": "https://api.buddy.farm/graphql?query=%7B+items+%7B+id+name+canMail+minMailableLevel+canMaster+baseYieldMinutes+%7D+%7D",
+  "items": [
+    {
+      "id": "511",
+      "name": "10 Gold",
+      "mailable": true,
+      "min_mailable_level": 75,
+      "masterable": false
+    },
+    {
+      "id": "454",
+      "name": "100 Gold",
+      "mailable": true,
+      "min_mailable_level": 90,
+      "masterable": false
+    },
+    {
+      "id": "510",
+      "name": "25 Gold",
+      "mailable": true,
+      "min_mailable_level": 80,
+      "masterable": false
+    },
+    {
+      "id": "187",
+      "name": "3-leaf Clover",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "1050",
+      "name": "3rd Birthday Card",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "1234",
+      "name": "4th Birthday Card",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "512",
+      "name": "5 Gold",
+      "mailable": true,
+      "min_mailable_level": 70,
+      "masterable": false
+    },
+    {
+      "id": "509",
+      "name": "50 Gold",
+      "mailable": true,
+      "min_mailable_level": 85,
+      "masterable": false
+    },
+    {
+      "id": "1498",
+      "name": "5th Birthday Card",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "91",
+      "name": "Acorn",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "1304",
+      "name": "Acorn Pie",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "44",
+      "name": "Apple",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "829",
+      "name": "Apple Basket",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "379",
+      "name": "Apple Cider",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "1109",
+      "name": "Apple Crate 01",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "1280",
+      "name": "Apple Crate 02",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "830",
+      "name": "Apple Pie",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "41",
+      "name": "Aquamarine",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "508",
+      "name": "Arnold Palmer",
+      "mailable": true,
+      "min_mailable_level": 99,
+      "masterable": true
+    },
+    {
+      "id": "108",
+      "name": "Arrowhead",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "237",
+      "name": "Axe",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "1104",
+      "name": "Baba's Snack Pack",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "610",
+      "name": "Backpack",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "793",
+      "name": "Beach Ball",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "790",
+      "name": "Beatrix's Big Box of Boom",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "1091",
+      "name": "Beatrix's Booming Brawl Box 01",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "1261",
+      "name": "Beatrix's Booming Brawl Box 02",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "1513",
+      "name": "Beatrix's Booming Brawl Box 03",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "111",
+      "name": "Bird Egg",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "1039",
+      "name": "Birthday Surprise Box 03",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "1233",
+      "name": "Birthday Surprise Box 04",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "1490",
+      "name": "Birthday Surprise Box 05",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "104",
+      "name": "Black Powder",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "447",
+      "name": "Blitzen",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "57",
+      "name": "Blue Crab",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "535",
+      "name": "Blue Dye",
+      "mailable": true,
+      "min_mailable_level": 75,
+      "masterable": true
+    },
+    {
+      "id": "171",
+      "name": "Blue Feathers",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "131",
+      "name": "Bluegill",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "789",
+      "name": "Bomb",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "113",
+      "name": "Bone",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "986",
+      "name": "Boobun's Spray Bottle",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "742",
+      "name": "Bouquet of Flowers",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "483",
+      "name": "Box of Chocolate 01",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "715",
+      "name": "Box of Chocolate 02",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "661",
+      "name": "Breakfast Boost",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "23",
+      "name": "Bucket",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "739",
+      "name": "Buddy Doll",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "747",
+      "name": "Buddy Loves You Card",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "1244",
+      "name": "Buddy's Beach Bag",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "807",
+      "name": "Buddy's School Bag",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "781",
+      "name": "Cabbage Stew",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "877",
+      "name": "Calavera 01",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "878",
+      "name": "Calavera 02",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "750",
+      "name": "Capy Birthday Card",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "144",
+      "name": "Carbon Sphere",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "132",
+      "name": "Carp",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "19",
+      "name": "Carrot",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "643",
+      "name": "Cat's Meow",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "285",
+      "name": "Caterpillar",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "186",
+      "name": "Cheese",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "674",
+      "name": "Christmas Card",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "399",
+      "name": "Christmas Present 01",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "429",
+      "name": "Christmas Present 02",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "434",
+      "name": "Christmas Present 07",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "1592",
+      "name": "Cid\u2019s Minecart 01",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "749",
+      "name": "Clawed Card",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "605",
+      "name": "Clubs",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "103",
+      "name": "Coal",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "968",
+      "name": "Coderanger's Missing Semicolon",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "444",
+      "name": "Comet",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "746",
+      "name": "Congratulations Card",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "377",
+      "name": "Cornucopia 01",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "880",
+      "name": "Cornucopia 02",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "1323",
+      "name": "Cornucopia 03",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "39",
+      "name": "Crappie",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "1042",
+      "name": "Cricket",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "756",
+      "name": "Crunchy Omelette",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "29",
+      "name": "Cucumber",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "445",
+      "name": "Cupid",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "441",
+      "name": "Dancer",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "440",
+      "name": "Dasher",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "606",
+      "name": "Diamonds",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "446",
+      "name": "Donner",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "384",
+      "name": "Dragonfly",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "17",
+      "name": "Drum",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "521",
+      "name": "Egg 01",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "522",
+      "name": "Egg 02",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "523",
+      "name": "Egg 03",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "524",
+      "name": "Egg 04",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "525",
+      "name": "Egg 05",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "518",
+      "name": "Egg 06",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "526",
+      "name": "Egg 07",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "527",
+      "name": "Egg 08",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "528",
+      "name": "Egg 09",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "529",
+      "name": "Egg 10",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "530",
+      "name": "Egg 11",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "531",
+      "name": "Egg 12",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "753",
+      "name": "Egg Basket",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "1029",
+      "name": "Egg of Ages",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "1021",
+      "name": "Egg of Air",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "1022",
+      "name": "Egg of Chaos",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "1023",
+      "name": "Egg of Earth",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "1024",
+      "name": "Egg of Fire",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "1025",
+      "name": "Egg of Life",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "1026",
+      "name": "Egg of Light",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "1027",
+      "name": "Egg of Shadow",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "1028",
+      "name": "Egg of Space",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "1030",
+      "name": "Egg of Water",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "13",
+      "name": "Eggplant",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "26",
+      "name": "Eggs",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "106",
+      "name": "Explosive",
+      "mailable": true,
+      "min_mailable_level": 50,
+      "masterable": true
+    },
+    {
+      "id": "636",
+      "name": "Fall Basket",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "936",
+      "name": "Fancy Present",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "42",
+      "name": "Feathers",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "52",
+      "name": "Fern Leaf",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "1157",
+      "name": "Festive Eggnog",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "286",
+      "name": "Fire Ant",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "970",
+      "name": "Firestream's Magic Wire",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "452",
+      "name": "Fireworks",
+      "mailable": true,
+      "min_mailable_level": 99,
+      "masterable": false
+    },
+    {
+      "id": "45",
+      "name": "Fish Bones",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "1269",
+      "name": "Fish and Chips",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "194",
+      "name": "Fishing Net",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "975",
+      "name": "Five Point Mace",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "173",
+      "name": "Flier",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "967",
+      "name": "Forcepath's Book of Quest Requirements",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "1148",
+      "name": "Friendship Bag 01",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "963",
+      "name": "Frozen Chest 01",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "1175",
+      "name": "Frozen Chest 02",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "1349",
+      "name": "Frozen Chest 03",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "1347",
+      "name": "Frozen Hops",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "1171",
+      "name": "Frozen Radish",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "653",
+      "name": "Fruit Punch",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "1212",
+      "name": "Fuzzy Chick 01",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "1214",
+      "name": "Fuzzy Chick 02",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "1215",
+      "name": "Fuzzy Chick 03",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "1216",
+      "name": "Fuzzy Chick 04",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "1217",
+      "name": "Fuzzy Chick 05",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "1218",
+      "name": "Fuzzy Chick 06",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "1219",
+      "name": "Fuzzy Chick 07",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "1220",
+      "name": "Fuzzy Chick 08",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "1221",
+      "name": "Fuzzy Chick 09",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "1222",
+      "name": "Fuzzy Chick 10",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "1223",
+      "name": "Fuzzy Chick 11",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "1224",
+      "name": "Fuzzy Chick 12",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "1489",
+      "name": "Galactic Egg Basket",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "1476",
+      "name": "Garden Crate 01",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "1188",
+      "name": "Gare Bear",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "831",
+      "name": "Get Well Soon Card",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "1309",
+      "name": "Ghost Candy",
+      "mailable": true,
+      "min_mailable_level": 10,
+      "masterable": false
+    },
+    {
+      "id": "287",
+      "name": "Giant Centipede",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "78",
+      "name": "Glass Orb",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "159",
+      "name": "Gold Carrot",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "458",
+      "name": "Gold Catfish",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "189",
+      "name": "Gold Cucumber",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "460",
+      "name": "Gold Drum",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "262",
+      "name": "Gold Eggplant",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "172",
+      "name": "Gold Feather",
+      "mailable": true,
+      "min_mailable_level": 99,
+      "masterable": false
+    },
+    {
+      "id": "161",
+      "name": "Gold Peas",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "157",
+      "name": "Gold Peppers",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "457",
+      "name": "Gold Trout",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "463",
+      "name": "Goldgill",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "748",
+      "name": "Good Luck Card",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "120",
+      "name": "Grapes",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "382",
+      "name": "Grasshopper",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "987",
+      "name": "Green Backpack",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "56",
+      "name": "Green Chromis",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "203",
+      "name": "Green Dye",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "74",
+      "name": "Green Parchment",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "191",
+      "name": "Grubs",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "277",
+      "name": "Gummy Worms",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "236",
+      "name": "Hammer",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "699",
+      "name": "Happy Cookies",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "1275",
+      "name": "Happy Farmiversary Card",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "1322",
+      "name": "Happy Halloween Card",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "671",
+      "name": "Heart Container",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "972",
+      "name": "Heart-shaped Box 01",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "1187",
+      "name": "Heart-shaped Box 02",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "1444",
+      "name": "Heart-shaped Box 03",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "971",
+      "name": "Heart-shaped Gem",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "607",
+      "name": "Hearts",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "1292",
+      "name": "Hensods's Bonsai",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "755",
+      "name": "Hickory Omelette",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "109",
+      "name": "Hide",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "779",
+      "name": "Holger's Lunch Box",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "1338",
+      "name": "Holiday Cake",
+      "mailable": true,
+      "min_mailable_level": 10,
+      "masterable": false
+    },
+    {
+      "id": "1337",
+      "name": "Holiday Cheer Bundle 01",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "46",
+      "name": "Hops",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "164",
+      "name": "Horn",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "283",
+      "name": "Horned Beetle",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "185",
+      "name": "Iced Tea",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "1273",
+      "name": "Inferno Pepper",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "130",
+      "name": "Iron Cup",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "762",
+      "name": "Joker",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "1530",
+      "name": "Koala's Corgi",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "260",
+      "name": "Ladder",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "500",
+      "name": "Large Net",
+      "mailable": true,
+      "min_mailable_level": 99,
+      "masterable": true
+    },
+    {
+      "id": "25",
+      "name": "Largemouth Bass",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "110",
+      "name": "Leather",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "118",
+      "name": "Leather Diary",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "50",
+      "name": "Leek",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "62",
+      "name": "Lemon",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "778",
+      "name": "Lemon Cream Pie",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "86",
+      "name": "Lemonade",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "1531",
+      "name": "Lorn's Expedition Kit",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "716",
+      "name": "Lovely Cookies",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "673",
+      "name": "Lovely Present",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "135",
+      "name": "MIAB",
+      "mailable": true,
+      "min_mailable_level": 75,
+      "masterable": true
+    },
+    {
+      "id": "1032",
+      "name": "Magical Chest 01",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "1202",
+      "name": "Magical Chest 02",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "1031",
+      "name": "Magical Egg Basket",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "498",
+      "name": "Mealworms",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "85",
+      "name": "Milk",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "192",
+      "name": "Minnows",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "1291",
+      "name": "Mizzem's Daisies",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "505",
+      "name": "Mug of Beer",
+      "mailable": true,
+      "min_mailable_level": 99,
+      "masterable": false
+    },
+    {
+      "id": "43",
+      "name": "Mushroom",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "75",
+      "name": "Mushroom Paste",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "634",
+      "name": "Mushroom Stew",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "654",
+      "name": "Neigh",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "303",
+      "name": "Oak",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "116",
+      "name": "Old Boot",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "33",
+      "name": "Onion",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "635",
+      "name": "Onion Soup",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "61",
+      "name": "Orange",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "84",
+      "name": "Orange Juice",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "647",
+      "name": "Over The Moon",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "586",
+      "name": "Peach",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "587",
+      "name": "Peach Juice",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "27",
+      "name": "Peas",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "11",
+      "name": "Peppers",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "989",
+      "name": "Perfect Paint Palette",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "980",
+      "name": "Piece 03",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "764",
+      "name": "Piece 04",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "770",
+      "name": "Piece 11",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "763",
+      "name": "Piece 23",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "983",
+      "name": "Piece 30",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "1310",
+      "name": "Pillow Case 01",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "258",
+      "name": "Pirate Bandana",
+      "mailable": true,
+      "min_mailable_level": 99,
+      "masterable": false
+    },
+    {
+      "id": "246",
+      "name": "Pirate Flag",
+      "mailable": true,
+      "min_mailable_level": 99,
+      "masterable": false
+    },
+    {
+      "id": "501",
+      "name": "Pot of Gold (Large)",
+      "mailable": true,
+      "min_mailable_level": 60,
+      "masterable": false
+    },
+    {
+      "id": "502",
+      "name": "Pot of Gold (Medium)",
+      "mailable": true,
+      "min_mailable_level": 40,
+      "masterable": false
+    },
+    {
+      "id": "503",
+      "name": "Pot of Gold (Small)",
+      "mailable": true,
+      "min_mailable_level": 20,
+      "masterable": false
+    },
+    {
+      "id": "48",
+      "name": "Potato",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "442",
+      "name": "Prancer",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "796",
+      "name": "Prism Shell",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "810",
+      "name": "Protein Bar",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "537",
+      "name": "Purple Dye",
+      "mailable": true,
+      "min_mailable_level": 75,
+      "masterable": true
+    },
+    {
+      "id": "53",
+      "name": "Purple Flower",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "73",
+      "name": "Purple Parchment",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "644",
+      "name": "Quandary Chowder",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "31",
+      "name": "Radish",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "785",
+      "name": "Ramjoram's Mask",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "536",
+      "name": "Red Dye",
+      "mailable": true,
+      "min_mailable_level": 75,
+      "masterable": true
+    },
+    {
+      "id": "974",
+      "name": "Red Envelope",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "1601",
+      "name": "Redbrook Patch",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "962",
+      "name": "Refined Corn Quartz",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "193",
+      "name": "Rope",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "1082",
+      "name": "Rosalie's Beach Tote",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "448",
+      "name": "Rudolph",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "1090",
+      "name": "Safety Goggles",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "1166",
+      "name": "Sappy Christmas Card",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "601",
+      "name": "Scrap Metal",
+      "mailable": true,
+      "min_mailable_level": 80,
+      "masterable": false
+    },
+    {
+      "id": "600",
+      "name": "Scrap Wire",
+      "mailable": true,
+      "min_mailable_level": 80,
+      "masterable": false
+    },
+    {
+      "id": "645",
+      "name": "Sea Pincher Special",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "77",
+      "name": "Shimmer Stone",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "282",
+      "name": "Shiny Beetle",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "1156",
+      "name": "Shiny Present",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "238",
+      "name": "Shovel",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "141",
+      "name": "Shrimp",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "646",
+      "name": "Shrimp-a-Plenty",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "139",
+      "name": "Skipjack",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "302",
+      "name": "Slimestone",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "58",
+      "name": "Small Prawn",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "284",
+      "name": "Snail",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "412",
+      "name": "Snowball",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "608",
+      "name": "Spades",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "1607",
+      "name": "Sparkle Dust",
+      "mailable": true,
+      "min_mailable_level": 60,
+      "masterable": true
+    },
+    {
+      "id": "362",
+      "name": "Spider",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "657",
+      "name": "Spooky Cookies",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "862",
+      "name": "Spooky Pie",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "494",
+      "name": "Spring Basket 01",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "1194",
+      "name": "Spring Basket 02",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "1456",
+      "name": "Spring Basket 03",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "766",
+      "name": "Stack of Cards",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "134",
+      "name": "Stingray",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "40",
+      "name": "Stone",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "603",
+      "name": "Summer Basket",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "1081",
+      "name": "Supply Voucher",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "1096",
+      "name": "Support's Ticket",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "969",
+      "name": "Tenfoo's Lost Sock",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "745",
+      "name": "Thank You Card",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "1270",
+      "name": "Thomas's Tavern Tote",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "15",
+      "name": "Tomato",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "1504",
+      "name": "Traveler's Bag 01",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "364",
+      "name": "Treat Bag 02",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "656",
+      "name": "Treat Bag 04",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "863",
+      "name": "Treat Bag 05",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "1124",
+      "name": "Treat Bag 06",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "63",
+      "name": "Trout",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "163",
+      "name": "Twine",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "76",
+      "name": "Unpolished Shimmer Stone",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "488",
+      "name": "Valentines Card",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "1437",
+      "name": "Veggie Juice",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "443",
+      "name": "Vixen",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "884",
+      "name": "Void Bag 01",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "801",
+      "name": "We Know Card",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "888",
+      "name": "Welcome Card",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "705",
+      "name": "Winter Basket",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "35",
+      "name": "Wood",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "37",
+      "name": "Wooden Box",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "845",
+      "name": "Wooden Button",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "738",
+      "name": "Wooden Table",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "18",
+      "name": "Worms",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "427",
+      "name": "Yarn",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "24",
+      "name": "Yellow Perch",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": true
+    },
+    {
+      "id": "802",
+      "name": "You Rock Card",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    },
+    {
+      "id": "519",
+      "name": "frank's Basket",
+      "mailable": true,
+      "min_mailable_level": 0,
+      "masterable": false
+    }
+  ]
+}

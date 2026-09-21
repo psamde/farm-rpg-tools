@@ -235,3 +235,7 @@ const {craftMapDemandAllocation}=require('./web/craft-map-model.js');
  assert.equal(craftMapUsage({kind:'item',autoSupply:true,stock:0,totalSupply:0}),'fulfilled');
  console.log('Automatic external supplies are provided by default; explicit zero and exploration sources remain distinct.');
 }
+
+const suppliedOnly=buildCraftMap(items,{item_balances:[],areas:[]},{targets:{[id('Purple Diary')]:100},provided_targets:{[id('Purple Diary')]:{quantity:100,taken:0}},secondary:[]});
+assert(!suppliedOnly.nodes.some(n=>n.id===id('Purple Diary')||n.id===id('Mushroom')));
+console.log('Provided primary goals do not generate phantom crafting branches.');

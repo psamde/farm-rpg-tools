@@ -42,6 +42,7 @@ function craftMapDraftQuantity(goal){
  return Number.isFinite(value)&&value>0?value:0;
 }
 function buildCraftMap(items,plan,settings,drafts=[],expanded=[]){
+ if(settings.provided_targets)settings={...settings,targets:Object.fromEntries(Object.entries(settings.targets||{}).map(([id,q])=>[id,Math.max(0,q-(settings.provided_targets[id]?.quantity||0))]).filter(([,q])=>q>0))};
  const nodes=new Map(),links=new Map(),balances=Object.fromEntries(plan.item_balances.map(b=>[b.item_id,b]));
  // Optional outputs are reserved only for legacy report presentation. They
  // remain usable stock in the map; only primary-target reservations are held.

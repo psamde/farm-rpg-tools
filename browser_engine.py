@@ -5,13 +5,66 @@ from collections import OrderedDict
 _PRIMARY_CACHE = OrderedDict()
 _CACHE_CATALOG = None
 
-from planner import ranked_plans, passive_plans
+from planner import plan, ranked_plans, passive_plans
 from secondary import consume_leftovers
 
 # Match bbybxx/farm src/utils/exploringUtils.js Cockatrice effect.
 COCKATRICE_ITEMS = frozenset(('Fire Ant', 'Caterpillar', 'Spider', 'Horned Beetle',
     'Shiny Beetle', 'Snail', 'Giant Centipede', 'Ruby Scorpion', 'Onyx Scorpion'))
 _PERK_CATALOG = (None, None)
+_SAVINGS_CACHE = OrderedDict()
+
+
+def target_inventory_savings(catalog, payload, result, deferred=None):
+    """Marginal primary-route savings, with shared drops and reserved stock.
+
+    Optional comparisons never fail an otherwise usable plan. They run after
+    the route is published and reuse results when only leftover crafts change.
+    """
+    goals = payload.get('targets', {})
+    if not goals or payload.get('planner_mode') == 'passive':
+        return
+    common = {k: payload[k] for k in ('areas', 'inventory', 'iron_depot', 'runecube', 'resource_saver') if k in payload}
+    key = (id(catalog), json.dumps([goals, common], sort_keys=True))
+    cached = _SAVINGS_CACHE.get(key)
+    if cached is not None:
+        result['inventory_savings'] = deepcopy(cached)
+        return
+    comparison = dict(baseline_explores=None, items={}, complete=False)
+    result['inventory_savings'] = comparison
+    def baseline():
+        try:
+            comparison['baseline_explores'] = plan(catalog, goals, suggest_inventory=False, **common)['optimal_total_explores']
+        except ValueError:
+            comparison['unavailable'] = True
+    def batch(refs):
+        if not comparison.get('unavailable'):
+            for ref in refs:
+                stock = dict(common.get('inventory', {}))
+                # Same reservation as the UI: owned finished items cannot also
+                # be consumed by another target in this comparison.
+                if ref in stock:
+                    stock[ref] = max(0, stock[ref] - goals[ref])
+                remaining = {i: q for i, q in goals.items() if i != ref}
+                try:
+                    after = plan(catalog, remaining, suggest_inventory=False, **dict(common, inventory=stock))['optimal_total_explores'] if remaining else 0
+                    comparison['items'][ref] = dict(explores_saved=comparison['baseline_explores']-after, explores_after=after)
+                except ValueError:
+                    comparison['items'][ref] = dict(unavailable=True)
+    def finish():
+        comparison['complete'] = True
+        _SAVINGS_CACHE[key] = deepcopy(comparison)
+        while len(_SAVINGS_CACHE) > 4:
+            _SAVINGS_CACHE.popitem(last=False)
+    jobs = [baseline]
+    refs = list(goals)
+    jobs.extend(lambda refs=refs[i:i+4]: batch(refs) for i in range(0, len(refs), 4))
+    jobs.append(finish)
+    if deferred is not None:
+        deferred.extend(jobs)
+    else:
+        for job in jobs:
+            job()
 
 def catalog_with_perks(catalog, payload):
     """Boost yields, not probabilities; never mutate or repeatedly boost base data."""
@@ -39,6 +92,7 @@ def compute(catalog, payload, progress=lambda done,total: None, deferred=None):
         payload.setdefault(name, default)
     if _CACHE_CATALOG is not catalog:
         _PRIMARY_CACHE.clear()
+        _SAVINGS_CACHE.clear()
         _CACHE_CATALOG = catalog
     key = json.dumps({k: payload.get(k) for k in ('planner_mode','targets','areas','inventory','iron_depot','runecube','resource_saver','max_areas','combinations_mode')}, sort_keys=True)
     hit = key in _PRIMARY_CACHE
@@ -48,7 +102,7 @@ def compute(catalog, payload, progress=lambda done,total: None, deferred=None):
     if hit:
         result = deepcopy(_PRIMARY_CACHE[key])
     else:
-        if payload.get('planner_mode') == 'passive':
+        if payload.get('planner_mode') == 'passive' or not payload.get('targets'):
             result = passive_plans(catalog, max_areas=payload.get('max_areas',3), **common)
             result['production_interval'] = payload.get('production_interval',60)
         else:
@@ -73,6 +127,8 @@ def compute(catalog, payload, progress=lambda done,total: None, deferred=None):
     result['plans'] = list(unique.values())
     result['enumeration']['feasible_options'] = len(result['plans'])
     result['performance'] = dict(primary_cache_hit=hit, compute_seconds=time.perf_counter()-started)
+    if payload.get('estimate_inventory_savings'):
+        target_inventory_savings(catalog, payload, result, deferred)
     return result
 
 

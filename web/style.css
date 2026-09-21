@@ -24,7 +24,7 @@
 
 .targetbar{padding:20px 24px;margin-bottom:24px}.targetbar>.hint{margin:6px 0 16px}.targetbarcontent{display:flex;flex-wrap:wrap;gap:16px;align-items:stretch}.targetbar #targets{display:flex;flex-wrap:wrap;gap:12px;flex:1 1 320px;min-width:0}.targetbar #targets:empty{display:none}.targetbar .targetrow{flex:1 1 210px;max-width:310px;min-width:200px;margin:0;padding:12px 14px}.targetbar .targetrow label{margin:10px 0 5px}.targetbar .targetrow input{max-width:none;width:100%}.targetbar #addForm{flex:1 1 370px;display:flex;align-items:end;gap:12px;min-width:0;margin:0;padding:12px 14px;border:1px dashed var(--line);border-radius:8px}.targetbar .itemfield{flex:1 1 190px;min-width:140px}.targetbar .addrow{display:flex;gap:10px;align-items:end;flex:0 1 auto}.targetbar .addrow>div{width:100px;flex-shrink:0}.targetbar #addForm label{font-size:12px;margin:0 0 7px}.targetbar #addForm button{white-space:nowrap;height:42px}.setup>.settingsgroup:first-child{border-top:0;margin-top:0;padding-top:0}
 .setup .settingsgroup{margin-top:18px;padding-top:16px}.setup .settingsgroup>.settingrow{margin:0;padding:10px 0;min-height:56px}.setup .settingsgroup>.settingrow:last-child{margin:0;padding-bottom:0;border-bottom:0}.setup .settingsgroup>.settingrow.hasnote{border-bottom:0;padding-bottom:3px}.setup .settingnote{margin:3px 0 0;padding:0;font-size:11px}.setup .settingsgroup>:last-child{margin-bottom:0}.setup .settingsgroup>label:not(.settingrow){margin:12px 0 6px}.setup .settingsgroup>.hint{margin-top:6px;margin-bottom:0}.setup>details:not(.settingsgroup){margin-top:18px;padding-top:16px}.setup>details>.hint:last-child{margin-bottom:0}.setup>p.hint:last-child{margin:8px 0 0}.setup .settingrow small{margin-top:2px}.setup .effectivenessrow:last-child{border-bottom:0;padding-bottom:0}
-.gameicon{display:inline-block;width:24px;height:24px;object-fit:contain;flex-shrink:0;vertical-align:middle}.fallbackicon{color:var(--muted)}.itemname{display:inline-flex;align-items:center;gap:6px;vertical-align:middle}.itemname>span:not(.mmbadge){padding:0!important;border:0!important;font-size:inherit!important}.targetrow .gameicon{width:30px;height:30px}.targetrow .name{align-items:center}.areaused .gameicon{width:18px;height:18px}.areaused .itemname{margin:2px 0}.crafts>span,.material{display:inline-flex;align-items:center;gap:5px}.crafts .itemname{border:0;padding:0;font-size:inherit}.settingrow [data-setting-icon]{display:grid;grid-template-columns:24px 1fr;column-gap:9px;align-items:center}.settingrow [data-setting-icon]>.gameicon{grid-column:1;grid-row:1 / span 2}.settingrow [data-setting-icon]>small{grid-column:2}.areaicon{display:inline-block;color:var(--muted);margin-right:7px;font-size:19px;line-height:1;vertical-align:middle}.costreport .gameicon{width:20px;height:20px}.setup #areaChoices .check{align-items:center;gap:7px}.consumer strong .itemname{font-size:14px}
+.gameicon{display:inline-block;width:24px;height:24px;object-fit:contain;flex-shrink:0;vertical-align:middle}.fallbackicon{color:var(--muted)}.itemname{display:inline-flex;align-items:center;gap:6px;vertical-align:middle}.itemname>span:not(.mmbadge):not(.mailablebadge){padding:0!important;border:0!important;font-size:inherit!important}.targetrow .gameicon{width:30px;height:30px}.targetrow .name{align-items:center}.areaused .gameicon{width:18px;height:18px}.areaused .itemname{margin:2px 0}.crafts>span,.material{display:inline-flex;align-items:center;gap:5px}.crafts .itemname{border:0;padding:0;font-size:inherit}.settingrow [data-setting-icon]{display:grid;grid-template-columns:24px 1fr;column-gap:9px;align-items:center}.settingrow [data-setting-icon]>.gameicon{grid-column:1;grid-row:1 / span 2}.settingrow [data-setting-icon]>small{grid-column:2}.areaicon{display:inline-block;color:var(--muted);margin-right:7px;font-size:19px;line-height:1;vertical-align:middle}.costreport .gameicon{width:20px;height:20px}.setup #areaChoices .check{align-items:center;gap:7px}.consumer strong .itemname{font-size:14px}
 @media(max-width:950px){.targetbar #addForm{flex-basis:100%}.targetbar .targetrow{max-width:none}}@media(max-width:600px){.targetbar{padding:16px}.targetbar #addForm{flex-wrap:wrap}.targetbar .itemfield{flex-basis:100%}.targetbar .addrow{width:100%}.targetbar .addrow>div{flex:1}.targetbar .targetrow{min-width:0;flex-basis:100%}.targetbarcontent{gap:12px}}
 
 /* Compact target list and exploration controls. */
@@ -195,7 +195,7 @@ body.reordering,body.reordering *{cursor:grabbing!important;user-select:none!imp
  .secondaryrow .prioritycontrols button,.secondaryrow .prioritycontrols .draghandle,.secondaryrow .prioritycontrols button:not(.draghandle){width:44px;height:44px;flex:0 0 44px;font-size:19px;border:1px solid var(--line);border-radius:8px}
  .secondaryrow>.bottleneckbody,.secondaryrow>.secondaryextras{grid-column:1 / -1;grid-row:auto;padding:10px 0}
  input:not([type=checkbox]),select,textarea{font-size:16px!important;min-height:44px}button.iconbutton,.ingredienttoggle{min-width:44px;min-height:44px}input[type=checkbox]{min-width:22px;min-height:22px}
- .itemname{min-width:0;max-width:100%;flex-wrap:wrap}.itemname>span:not(.mmbadge){overflow-wrap:anywhere}.mmbadge{flex-shrink:0}
+ .itemname{min-width:0;max-width:100%;flex-wrap:wrap}.itemname>span:not(.mmbadge):not(.mailablebadge){overflow-wrap:anywhere}.mmbadge{flex-shrink:0}
  .routecontrols{width:100%;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.routecontrols>label{display:flex;flex-direction:column;align-items:stretch;gap:6px}.routecontrols input,.routecontrols select{width:100%}.routefoods{grid-column:1 / -1;flex-wrap:wrap}.routecards{max-width:100%;overscroll-behavior-x:contain}.routecard{flex-basis:170px}
  .summarygrid{display:flex;flex-direction:column;gap:18px}.summarygrid>.metric{min-width:0}.planchoice{max-width:100%;min-width:0}.planchoice .route{white-space:normal;overflow-wrap:anywhere}
  .costreport{max-width:100%;overflow-x:auto}.unusedtable{width:100%;table-layout:fixed}.unusedtable th:first-child{width:44%}.unusedtable td,.unusedtable th{padding:10px 4px;overflow-wrap:anywhere}.unusedtable .materialbutton{text-align:left;max-width:100%;white-space:normal}.unusedtable .itemname{font-size:13px}
@@ -442,3 +442,34 @@ dialog,#suggestionsDialog{position:fixed;inset:0;margin:auto;max-height:calc(100
 .quest-requirement:has(input:checked){border-color:var(--green)}
 .quest-requirement.is-unavailable{cursor:default;opacity:.65}
 @media(max-width:600px){.quest-picker .quest-import-heading .quest-bulk button{min-height:40px}.quest-requirements-list{grid-template-columns:1fr}}
+
+/* Primary goals: comparable effort, then an explicit inventory choice. */
+.targetbar .targetrow{grid-template-columns:minmax(220px,1fr) 150px minmax(205px,auto) 32px;gap:16px;align-items:center}
+.targetbar .targetrow .targetquantity{flex-direction:column;align-items:stretch;gap:4px}.targetbar .targetrow input{width:100%}
+.targetbar .targetrow .name{flex-wrap:nowrap;justify-content:flex-start;align-items:center;min-width:0}
+.targetbar .targetrow .name>div{min-width:0}.targetbar .targetrow .itemname{flex-wrap:wrap}
+.target-rank{font-size:12px;font-weight:500;color:var(--muted);min-width:20px;font-variant-numeric:tabular-nums}
+.target-effort{display:block;font-size:12px;font-weight:400;color:var(--muted);margin-top:5px}
+.target-inventory{display:flex;flex-direction:column;align-items:flex-start;gap:5px}
+.target-inventory button{border:1px solid var(--line);border-radius:7px;padding:8px 12px;background:var(--panel);color:inherit;font-size:13px;min-height:36px}
+.target-inventory button:hover{border-color:var(--green)}
+.target-inventory small,.target-provided-note{font-size:12px;color:var(--muted);font-weight:400;line-height:1.4}
+.targetbar .target-provided{background:color-mix(in srgb,#55a977 10%,transparent)}
+.targetrow input:disabled{opacity:.65}.target-cost-note{margin:0 0 14px}
+.mailablebadge{display:inline-flex;align-items:center;justify-content:center;flex:none;padding:3px 5px;border:1px solid #507f96;border-radius:4px;background:#e5f4fb;color:#285771;font-size:9px;font-weight:650;line-height:1.1;letter-spacing:.1px;white-space:nowrap;cursor:help}
+[data-theme=dark] .mailablebadge{background:#203843;color:#bce2f3;border-color:#547b8b}
+@media(max-width:1000px){
+ .targetbar .targetrow{grid-template-columns:minmax(0,1fr) 140px 32px;gap:12px}
+ .targetbar .targetrow .name{grid-column:1;grid-row:1}
+ .targetbar .targetrow .targetquantity{grid-column:2;grid-row:1}
+ .targetbar .targetrow>.iconbutton{grid-column:3;grid-row:1}
+ .targetbar .targetrow .target-inventory{grid-column:1 / -1;grid-row:2;flex-direction:row;align-items:center;flex-wrap:wrap;gap:8px 12px}
+}
+@media(max-width:600px){
+ .targetbar .targetrow{grid-template-columns:minmax(0,1fr) 44px}
+ .targetbar .targetrow>.iconbutton{grid-column:2}
+ .targetbar .targetrow .targetquantity{grid-column:1 / -1;grid-row:2}
+ .targetbar .targetrow .target-inventory{grid-row:3;align-items:flex-start;flex-direction:column;width:100%}
+ .target-inventory button{min-height:44px;width:100%;font-size:14px}
+ .target-rank{min-width:14px}.targetbar .targetrow .name{align-items:flex-start}
+}

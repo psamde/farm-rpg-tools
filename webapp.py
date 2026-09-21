@@ -8,7 +8,7 @@ from threading import Lock
 from urllib.parse import urlsplit
 from uuid import uuid4
 
-from browser_engine import catalog_with_perks
+from browser_engine import catalog_with_perks, target_inventory_savings
 from farmdata import read_json
 from planner import plan, ranked_plans, resolve, exploration_target_ids, passive_plans, calculation_error
 from secondary import validate_secondary, consume_leftovers
@@ -24,6 +24,15 @@ class Application:
         self.pool = ThreadPoolExecutor(max_workers=1)
 
     def metadata(self):
+        mail_path = ROOT / 'web/mailable-items.json'
+        mail_levels = {i['id']: i.get('min_mailable_level', 0)
+                       for i in read_json(mail_path)['items']} if mail_path.exists() else {}
+        def effort_fields(item):
+            sources = [self.catalog['sources'][s] for s in item.get('source_ids', [])]
+            return dict(mailable=any(s['kind'] == 'trading' for s in sources),
+                        min_mailable_level=item.get('min_mailable_level') or mail_levels.get(item['id'], 0),
+                        sources=[{k: s[k] for k in ('kind', 'location_id', 'actions_per_drop', 'conditions') if k in s}
+                                 for s in sources if s['kind'] in ('explore', 'fishing', 'farming', 'mining')])
         buildings = ['Sawmill', 'Orchard', 'Quarry', 'Hay Field',
                      'Chicken Coop', 'Cow Pasture', 'Raptor Pen', 'Vineyard', 'Worm Habitat', 'Trout/Bait Farm']
         workshop_ingredients = {ref for item in self.catalog['items'].values()
@@ -43,7 +52,7 @@ class Application:
         for item in self.catalog['items'].values():
             if item['name'] == 'Minnows' and item['id'] in workshop_ingredients:
                 passive.setdefault(item['id'], {'item_id': item['id'], 'sources': ['Trout/Bait Farm']})
-        return {'planner_api_version': 2, 'items': [{'id': i, 'name': x['name'], 'image': x.get('image'), 'craftable': x['craftable'], 'explorable': i in exploration_target_ids(self.catalog),
+        return {'planner_api_version': 2, 'effort_locations': self.catalog['locations'], 'items': [{'id': i, 'name': x['name'], 'image': x.get('image'), 'craftable': x['craftable'], 'explorable': i in exploration_target_ids(self.catalog), **effort_fields(x),
                            'farm_produced': x.get('type') == 'crop',
                            'output_quantity': x['output_quantity'], 'raw_materials': x['raw_materials'], 'direct_ingredients': x['direct_ingredients']}
                           for i, x in self.catalog['items'].items()],
@@ -64,7 +73,7 @@ class Application:
                 for i in sorted(seen, key=lambda i: self.catalog['items'][i]['name'])]
 
     def submit(self, payload):
-        if not isinstance(payload, dict) or not isinstance(payload.get('targets'), dict) or (not payload['targets'] and payload.get('planner_mode') != 'passive'):
+        if not isinstance(payload, dict) or not isinstance(payload.get('targets'), dict) or (not payload['targets'] and payload.get('planner_mode') != 'passive' and not payload.get('provided_targets')):
             raise ValueError('Add at least one target with a positive craft quantity.')
         if payload.get('planner_mode','goals') not in ('goals','passive') or payload.get('production_interval',60) not in (10,60):
             raise ValueError('Invalid production mode or interval.')
@@ -88,10 +97,10 @@ class Application:
         with self.lock:
             # Local single-user UI: replace pending work when the user changes targets.
             for job in self.jobs.values():
-                if job['status'] in ('queued', 'running'):
+                if job['status'] in ('queued', 'running', 'comparisons'):
                     job['cancelled'] = True
             for old in list(self.jobs)[:-8]:
-                if self.jobs[old]['status'] not in ('queued', 'running'):
+                if self.jobs[old]['status'] not in ('queued', 'running', 'comparisons'):
                     del self.jobs[old]
             self.jobs[key] = {'status': 'queued', 'done': 0, 'total': None, 'cancelled': False}
         self.pool.submit(self.compute, key, payload)
@@ -110,7 +119,7 @@ class Application:
             common = dict(areas=payload['areas'], inventory=payload.get('inventory', {}),
                           iron_depot=payload.get('iron_depot', False), runecube=payload.get('runecube', False),
                           resource_saver=payload.get('resource_saver', 0))
-            if payload.get('planner_mode') == 'passive':
+            if payload.get('planner_mode') == 'passive' or not payload.get('targets'):
                 result = passive_plans(catalog, max_areas=len(self.catalog['locations']), **common)
                 result['production_interval'] = payload.get('production_interval',60)
             else:
@@ -129,6 +138,13 @@ class Application:
                 unique.setdefault(signature, p)
             result['plans'] = list(unique.values())
             result['enumeration']['feasible_options'] = len(result['plans'])
+            if payload.get('estimate_inventory_savings'):
+                deferred = []
+                target_inventory_savings(catalog, payload, result, deferred)
+                job.update(status='comparisons', result=result)
+                for comparison in deferred:
+                    progress(job['done'], job['total'])
+                    comparison()
             job.update(status='complete', result=result)
         except Exception as error:
             job.update(calculation_error(error))

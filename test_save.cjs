@@ -100,3 +100,10 @@ assert.equal(Object.keys(loadedLarge.targets).length,64);assert.equal(loadedLarg
 assert.deepEqual(Array.from(loadedLarge.quest_imported_items.quest),['raw']);
 assert.throws(()=>c.decodePlanCode(c.encodePlanCode({...largeSave,quest_imported_items:{quest:'bad'}})));
 console.log('64-item plans and partial quest imports survive save/load without count limits.');
+
+const suppliedSave={...input,provided_targets:{raw:{quantity:200,taken:3}},inventory:'{"raw":0}'};
+assert.deepEqual(JSON.parse(JSON.stringify(c.decodePlanCode(c.encodePlanCode(suppliedSave)).provided_targets)),suppliedSave.provided_targets);
+assert.deepEqual(JSON.parse(JSON.stringify(c.decodePlanCode(oldCode).provided_targets)),{});
+assert.throws(()=>c.decodePlanCode(c.encodePlanCode({...input,provided_targets:{raw:{quantity:201,taken:0}}})));
+assert.throws(()=>c.decodePlanCode(c.encodePlanCode({...input,provided_targets:{raw:{quantity:200,taken:201}}})));
+console.log('Provided goals and reserved quantities survive save/load; old saves have none.');
