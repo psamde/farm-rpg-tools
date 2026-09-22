@@ -5,9 +5,16 @@
  function remaining(settings){
   return Object.fromEntries(Object.entries(settings.targets||{}).map(([id,q])=>[id,Math.max(0,q-(settings.provided_targets?.[id]?.quantity||0))]).filter(([,q])=>q>0));
  }
+ function split(settings,id,plan){
+  const total=settings.targets?.[id]||0,allocated=settings.provided_targets?.[id]?.quantity||0;
+  const balance=plan?.item_balances?.find(b=>b.item_id===id),credit=balance?.reserved_external_target_output||0;
+  const available=balance?Math.min(Math.max(0,(balance.expected_unused||0)+credit),Math.max(0,(balance.expected_exploration_drops||0)+(balance.crafted||0))):0;
+  const routeCapacity=Math.min(total,Math.floor(available+1e-8)),fromRoute=Math.min(allocated,routeCapacity);
+  return {total,craft:total-allocated,fromRoute,external:allocated-fromRoute,routeCapacity};
+ }
  function setProvided(settings,id,quantity){
   const total=settings.targets?.[id];
-  if(!Number.isSafeInteger(quantity)||quantity<0||quantity>total||!total)throw Error('Inventory quantity must be a whole number between zero and the total goal.');
+  if(!Number.isSafeInteger(quantity)||quantity<0||quantity>total||!total)throw Error('Sourced externally must be a whole number between zero and the total goal.');
   const old=settings.provided_targets?.[id]||{quantity:0,taken:0};
   if(quantity===old.quantity)return;
   const stock=JSON.parse(settings.inventory||'{}');let taken=old.taken;
@@ -35,6 +42,6 @@
    return {id,quantity,remaining:pending[id]||0,cost};
   }).sort((a,b)=>Number(b.remaining>0)-Number(a.remaining>0)||((Number.isFinite(b.cost.points)?b.cost.points:-1)-(Number.isFinite(a.cost.points)?a.cost.points:-1))||data.items[a.id].name.localeCompare(data.items[b.id].name));
  }
- const api={remaining,provide,undo,setProvided,setTotal,rank};
+ const api={remaining,split,provide,undo,setProvided,setTotal,rank};
  if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.TargetCosts=api;
 })(globalThis);

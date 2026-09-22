@@ -8,7 +8,7 @@ from threading import Lock
 from urllib.parse import urlsplit
 from uuid import uuid4
 
-from browser_engine import catalog_with_perks, target_inventory_savings
+from browser_engine import catalog_with_perks, target_inventory_savings, credit_external_targets
 from farmdata import read_json
 from planner import plan, ranked_plans, resolve, exploration_target_ids, passive_plans, calculation_error
 from secondary import validate_secondary, consume_leftovers
@@ -137,6 +137,8 @@ class Application:
                              tuple((t['item_id'], t['crafts']) for t in p.get('secondary', {}).get('targets', [])))
                 unique.setdefault(signature, p)
             result['plans'] = list(unique.values())
+            for p in result['plans']:
+                credit_external_targets(p, payload.get('provided_targets'))
             result['enumeration']['feasible_options'] = len(result['plans'])
             if payload.get('estimate_inventory_savings'):
                 deferred = []

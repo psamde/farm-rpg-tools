@@ -4,7 +4,7 @@ from copy import deepcopy
 from unittest.mock import patch
 
 import browser_engine
-from browser_engine import compute, target_inventory_savings
+from browser_engine import compute, guided_compute, target_inventory_savings, credit_external_targets
 from test_planner import small_catalog
 
 
@@ -74,6 +74,51 @@ class TargetInventoryTests(unittest.TestCase):
         result = {}
         target_inventory_savings(catalog, dict(targets={'3': 10}, areas=['a']), result)
         self.assertTrue(result['inventory_savings']['unavailable'])
+
+    def test_route_surplus_reduces_external_supply_without_changing_explores(self):
+        catalog = small_catalog()
+        payload = dict(targets={'2': 20000}, provided_targets={'1': {'quantity': 60000, 'taken': 0}}, areas=['joint'])
+        first = compute(catalog, payload)['plans'][0]
+        self.assertEqual(first['optimal_total_explores'], 40000)
+        self.assertEqual(first['external_target_supplies']['1'], dict(allocation=60000, from_route=20000, external_quantity=40000))
+        a = next(b for b in first['item_balances'] if b['item_id'] == '1')
+        self.assertEqual(a['expected_unused'], 0)
+        self.assertEqual(a['reserved_target_output'], 20000)
+        self.assertNotIn('1', [b['item_id'] for b in first['unused_items']])
+        # Recomputing or reloading must not feed the displayed 40k back as a
+        # smaller allocation, nor contaminate the cached primary balances.
+        again = compute(catalog, payload)['plans'][0]
+        self.assertEqual(again['external_target_supplies'], first['external_target_supplies'])
+        self.assertEqual(again['optimal_total_explores'], first['optimal_total_explores'])
+        credit_external_targets(again, payload['provided_targets'])
+        self.assertEqual(again['item_balances'], first['item_balances'])
+        capped = compute(catalog, dict(payload, provided_targets={'1': {'quantity': 10000, 'taken': 0}}))['plans'][0]
+        self.assertEqual(capped['external_target_supplies']['1']['external_quantity'], 0)
+        self.assertEqual(next(b for b in capped['item_balances'] if b['item_id'] == '1')['expected_unused'], 10000)
+
+    def test_only_credit_output_left_after_crafting_and_match_map_preview(self):
+        catalog = small_catalog()
+        goals = [dict(item_id='3', cap=5000, allow_exploration=False)]
+        payload = dict(targets={'4': 400}, areas=['joint'], secondary=goals,
+                       provided_targets={'1': {'quantity': 60000, 'taken': 0}})
+        p = compute(catalog, payload)['plans'][0]
+        self.assertEqual(p['optimal_total_explores'], 40000)
+        crafted = p['secondary']['targets'][0]['crafts']
+        self.assertGreaterEqual(crafted, 4999)  # Existing solver's whole-craft tolerance.
+        self.assertEqual(p['external_target_supplies']['1']['from_route'], 20000-crafted)
+        self.assertEqual(p['external_target_supplies']['1']['external_quantity'], 40000+crafted)
+        preview = guided_compute(catalog, dict(payload, replacement_goals=goals))['preview_plan']
+        self.assertEqual(preview['external_target_supplies'], p['external_target_supplies'])
+        self.assertEqual(preview['secondary']['targets'][0]['crafts'], crafted)
+
+    def test_external_stock_is_not_counted_as_route_output_and_credit_rounds_down(self):
+        p = dict(item_balances=[dict(item_id='1', starting_inventory=100, expected_exploration_drops=20.9,
+             crafted=0, reserved_target_output=0, expected_unused=120.9, expected_final_inventory=120.9)])
+        credit_external_targets(p, {'1': dict(quantity=60, taken=0)})
+        self.assertEqual(p['external_target_supplies']['1']['external_quantity'], 40)
+        self.assertAlmostEqual(p['item_balances'][0]['expected_unused'], 100.9)
+        credit_external_targets(p, {})
+        self.assertAlmostEqual(p['item_balances'][0]['expected_unused'], 120.9)
 
 
 if __name__ == '__main__':

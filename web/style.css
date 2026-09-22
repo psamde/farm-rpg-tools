@@ -478,3 +478,5 @@ dialog,#suggestionsDialog{position:fixed;inset:0;margin:auto;max-height:calc(100
 }
 
 .targetbar .targetrow>.iconbutton{align-self:center}
+
+.external-supply-label{cursor:help;text-decoration:underline dotted var(--muted);text-underline-offset:3px}

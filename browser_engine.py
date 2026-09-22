@@ -1,5 +1,6 @@
 from copy import deepcopy
 import json
+import math
 import time
 from collections import OrderedDict
 _PRIMARY_CACHE = OrderedDict()
@@ -13,6 +14,36 @@ COCKATRICE_ITEMS = frozenset(('Fire Ant', 'Caterpillar', 'Spider', 'Horned Beetl
     'Shiny Beetle', 'Snail', 'Giant Centipede', 'Ruby Scorpion', 'Onyx Scorpion'))
 _PERK_CATALOG = (None, None)
 _SAVINGS_CACHE = OrderedDict()
+
+
+def credit_external_targets(plan, provided):
+    """Use unclaimed route output before asking for external goal supplies.
+
+    Run after all crafts are solved. The saved allocation stays fixed, so a
+    credit never becomes a smaller input to the next solve (or grows the route).
+    Reserve credited output in the balances so the map cannot spend it twice.
+    """
+    balances = {b['item_id']: b for b in plan['item_balances']}
+    for b in balances.values():
+        previous = b.pop('reserved_external_target_output', 0)
+        b['reserved_target_output'] -= previous
+        b['expected_unused'] += previous
+    supplies = {}
+    for ref, allocation in (provided or {}).items():
+        quantity = allocation['quantity']
+        b = balances.get(ref)
+        # Existing stock was brought from outside, so it is not a route credit.
+        generated = max(0, b.get('expected_exploration_drops', 0) + b.get('crafted', 0)) if b else 0
+        available = min(max(0, b['expected_unused']), generated) if b else 0
+        credit = min(quantity, math.floor(available + 1e-8))
+        supplies[ref] = dict(allocation=quantity, from_route=credit, external_quantity=quantity-credit)
+        if credit:
+            b['reserved_external_target_output'] = credit
+            b['reserved_target_output'] += credit
+            b['expected_unused'] = max(0, b['expected_unused'] - credit)
+    plan['external_target_supplies'] = supplies
+    plan['unused_items'] = [b for b in plan['item_balances'] if b['expected_unused'] > 1e-8]
+    return plan
 
 
 def target_inventory_savings(catalog, payload, result, deferred=None):
@@ -125,6 +156,8 @@ def compute(catalog, payload, progress=lambda done,total: None, deferred=None):
                      tuple((t['item_id'], t['crafts']) for t in p.get('secondary', {}).get('targets', [])))
         unique.setdefault(signature, p)
     result['plans'] = list(unique.values())
+    for p in result['plans']:
+        credit_external_targets(p, payload.get('provided_targets'))
     result['enumeration']['feasible_options'] = len(result['plans'])
     result['performance'] = dict(primary_cache_hit=hit, compute_seconds=time.perf_counter()-started)
     if payload.get('estimate_inventory_savings'):
@@ -135,7 +168,7 @@ def compute(catalog, payload, progress=lambda done,total: None, deferred=None):
 def automatic_compute(catalog, payload, progress=lambda message: None):
     from automatic import maximize
     catalog = catalog_with_perks(catalog, payload)
-    baseline = compute(catalog, dict(payload, secondary=[]), lambda done,total: progress(f'Preparing primary route: {done} of {total}…' if total else 'Preparing primary route…'))
+    baseline = compute(catalog, dict(payload, secondary=[], provided_targets={}), lambda done,total: progress(f'Preparing primary route: {done} of {total}…' if total else 'Preparing primary route…'))
     primary = next((p for p in baseline['plans'] if p['area_set_id']==payload.get('selected_plan_key')), baseline['plans'][0])
     return maximize(catalog, primary, payload['areas'], payload.get('max_extra_locations',1), progress)
 
@@ -144,16 +177,17 @@ def guided_compute(catalog, payload, progress=lambda message: None):
     """Evaluate alternatives independently against the same primary/shared pool."""
     catalog = catalog_with_perks(catalog, payload)
     progress('Preparing the primary route (reusing it when cached)…')
-    baseline = compute(catalog, dict(payload, secondary=[]), lambda done,total: progress(f'Checking primary routes: {done}…') if done else None)
+    baseline = compute(catalog, dict(payload, secondary=[], provided_targets={}), lambda done,total: progress(f'Checking primary routes: {done}…') if done else None)
     primary = next((p for p in baseline['plans'] if p['area_set_id']==payload.get('selected_plan_key')), baseline['plans'][0])
     goals = payload.get('secondary', [])
     areas = sorted((set(payload.get('automatic_areas') or payload['areas']) & set(payload['areas'])) | {a['location_id'] for a in primary['areas']})
     def allocate(gs, source_choices=None, source_amounts=None, node_usage=None):
-        return consume_leftovers(catalog, primary, gs, areas=areas, defer_comparison=lambda _:None,
+        solved = consume_leftovers(catalog, primary, gs, areas=areas, defer_comparison=lambda _:None,
             map_planning=payload.get("map_planning", False),
             map_sources=payload.get("map_sources") if source_choices is None else source_choices,
             map_source_explores=payload.get("map_source_explores") if source_amounts is None else source_amounts,
             map_node_usage=payload.get("map_node_usage") if node_usage is None else node_usage) if gs else deepcopy(primary)
+        return credit_external_targets(solved, payload.get('provided_targets'))
     current = allocate(goals, payload.get('previous_map_sources'), payload.get('previous_map_source_explores'), payload.get('previous_map_node_usage'))
     before = {b['item_id']:b for b in current['item_balances']}
     old_outputs = {g['item_id']:g['crafts'] for g in current.get('secondary',{}).get('targets',[])}
