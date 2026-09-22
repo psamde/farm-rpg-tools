@@ -122,13 +122,23 @@ $('addForm').addEventListener('submit',e=>{e.preventDefault();try{const name=$('
 
 $('targets').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;if(b.dataset.targetMax){const id=b.dataset.targetId;TargetCosts.setProvided(state,id,b.dataset.targetMax==='inventory'?state.targets[id]:0);syncTargetInputs(id);inventoryRows();changed(false);return;}if(b.dataset.remove){TargetCosts.undo(state,b.dataset.remove);delete state.targets[b.dataset.remove];inventoryRows();changed();}});
 
+function clampTargetInput(field){
+ const inventory=field.dataset.inventoryQuantity,id=inventory||field.dataset.quantity;
+ if(!id||field.value===''||!Number.isFinite(Number(field.value)))return;
+ const total=state.targets[id],value=Math.max(0,Math.min(total,Math.trunc(Number(field.value))));
+ if(Number(field.value)!==value)field.value=String(value);
+ $(inventory?'target-'+id:'provided-'+id).value=total-value;
+ return value;
+}
+$('targets').addEventListener('input',e=>clampTargetInput(e.target));
+
 $('targets').addEventListener('change',e=>{
  const totalId=e.target.dataset.totalQuantity,inventoryId=e.target.dataset.inventoryQuantity,id=totalId||inventoryId||e.target.dataset.quantity;if(!id)return;
  try{const n=Number(e.target.value);if(e.target.value===''||!Number.isSafeInteger(n))throw Error('Enter a whole quantity.');
   if(totalId)TargetCosts.setTotal(state,id,n);
-  else {if(n<0||n>state.targets[id])throw Error('Use a quantity between zero and the total goal.');TargetCosts.setProvided(state,id,inventoryId?n:state.targets[id]-n);}
+  else {const bounded=clampTargetInput(e.target);TargetCosts.setProvided(state,id,inventoryId?bounded:state.targets[id]-bounded);}
   error('');syncTargetInputs(id);inventoryRows();changed(false);
- }catch(e){error(e.message);}
+ }catch(e){syncTargetInputs(id);error(e.message);}
 });
 
 function modeHelp(){$('modeHelp').textContent=state.mode==='best'?'Areas with zero explores are removed; duplicate results are merged.':'Every selected area must receive at least one explore. Slower pairs are kept.';}
