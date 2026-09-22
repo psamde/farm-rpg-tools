@@ -1,6 +1,7 @@
 const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
 const source=fs.readFileSync('web/app.js','utf8');
 const c={catalog:{locations:[{id:'a'}]}};vm.createContext(c);
+vm.runInContext(fs.readFileSync('web/global-settings.js','utf8'),c);
 vm.runInContext(source.match(/const defaults=.*?;/)[0]+';globalThis.base=defaults;',c);
 vm.runInContext(source.slice(source.indexOf('function blankModeSettings('),source.indexOf('let pendingPlannerMode=')),c);
 const blank=c.blankModeSettings({...c.base,theme:'light'},'passive');
@@ -8,7 +9,9 @@ assert.equal(blank.planner_mode,'passive');assert.equal(blank.theme,'light');
 assert.equal(Object.keys(blank.targets).length,0);assert.equal(blank.secondary.length,0);
 assert.equal(c.hasPlanContent(blank),false);
 assert.equal(c.hasPlanContent({...blank,areas:['a'],passive_inventory:'{"192":0}'}),false);
-for(const delta of [{targets:{x:1}},{secondary:[{item_id:'x'}]},{passive_inventory:'{"192":100}'},{resource_saver:45}])assert.equal(c.hasPlanContent({...blank,...delta}),true);
+for(const delta of [{targets:{x:1}},{secondary:[{item_id:'x'}]},{passive_inventory:'{"192":100}'}])assert.equal(c.hasPlanContent({...blank,...delta}),true);
 const reset=c.blankModeSettings({...blank,secondary:[{item_id:'x'}],passive_inventory:'{"192":100}',resource_saver:45},'goals');
-assert.equal(reset.passive_inventory,'{}');assert.equal(reset.resource_saver,0);assert.equal(reset.secondary.length,0);
+assert.equal(reset.passive_inventory,'{}');assert.equal(reset.resource_saver,45);assert.equal(reset.secondary.length,0);
 console.log('Mode reset and save-prompt applicability checks passed');
+
+assert.equal(c.hasPlanContent({...blank,resource_saver:45,tower_level:250,inventory_size:20000}),false,'global settings alone are not plan content');

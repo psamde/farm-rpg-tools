@@ -304,7 +304,7 @@ Tower MM badges use the FarmRPG Tower Masteries library snapshot in `data/tower-
 
 Route foods are selected separately for AP and Cider and persist locally. Selected timed meals are assumed active throughout. AP yield bonuses apply to the fixed exploration allocation; Chowder + Seltzer assumes additive +60%, with uncertainty retained in the detailed comparison. Pie/Stew round visits to five-drink clicks and check the inventory burst before crafting. Cider stamina uses the rounded scheduled batches, Wanderer, and Neigh. Tower badges distinguish GM and MM and show required Tower levels on hover.
 
-Primary targets accept workshop crafts or non-craftable exploration drops (for example Ant Apple). Craft goals count crafts; collection goals reserve final quantities after crafting, with starting inventory counted. Leftover optimization preserves collection goals. Save / load plan generates a versioned FW1 code containing targets, leftover priorities/caps, inventory, perks and route settings. Paste and load to restore inputs and recalculate; keep codes externally for multiple plans. Codes do not contain cached results.
+Primary targets accept workshop crafts or non-craftable exploration drops (for example Ant Apple). Craft goals count crafts; collection goals reserve final quantities after crafting, with starting inventory counted. Leftover optimization preserves collection goals. Save / load plan generates a versioned FW2 code containing targets, leftover choices/caps, starting inventory and route choices. Account settings are saved separately. Loading a legacy FW1 code also restores any account settings it contains. Paste and load to restore plan inputs and recalculate; keep codes externally for multiple plans. Codes do not contain cached results.
 
 Passive production mode starts with one batch of supplied items and no reserved primary goals. Choose hourly or 10-minute batch labels and enter quantities per period; quantities do not change automatically. The existing priority allocator consumes these supplies and can explore for missing ingredients when enabled. Production amounts and starting inventory are stored separately and included in save codes. Production timing, food duration and whether the route fits within the period are not simulated.
 
@@ -339,6 +339,28 @@ Comparisons run in the browser worker, can be cancelled by closing the dialog, a
 
 The desktop map follows exploration sources through shared ingredients to primary item or quest targets on the right. Click an item or its + connector to choose another craft. Proposed crafts share ingredient nodes, with missing quantities shown as dashed cards. Click a shortage to choose an exploration source, then **Preview changes** to compare the combined crafts, extra explores (including percentage), and new locations. **Apply to route and Craftworks** adds the proposal to the existing planner. Draft quantities are aims; the preview shows the solver's actual shared allocation.
 
-Set your Tower level to put upcoming MM/GM requirements first in craft suggestions. Earlier requirements are not treated as already mastered. Click any card to inspect it; Expand map, zoom, Fit, and scrolling help navigate larger plans. Craft choices show ingredient availability, and red warnings open the missing ingredient. Use Review & apply changes, then Add these crafts to my plan to commit a draft. Tower level is saved with the plan; uncommitted draft proposals are not.
+Set your Tower level to put upcoming MM/GM requirements first in craft suggestions. Earlier requirements are not treated as already mastered. Click any card to inspect it; Expand map, zoom, Fit, and scrolling help navigate larger plans. Craft choices show ingredient availability, and red warnings open the missing ingredient. Use Review & apply changes, then Add these crafts to my plan to commit a draft. Tower level is now stored in global Settings; uncommitted draft proposals are not saved with the plan.
 
 The map offers **Add and use all** (shows shortages for the full batch) and **Use as much as possible, void the rest** (caps the draft at available supplies without extra exploring). **Mark as Void** accepts surplus and mutes its card; it does not remove ingredients from the solver and can be undone. Primary targets and their ingredient chains cannot be deleted from the map. Deleting an optional ingredient also removes the optional crafts that require it, listed beside the delete action. Free Iron/Nails are included when calculating craftable intermediates; Iron Rings still require Stone.
+
+
+### Global settings (v0.1.98)
+
+Settings is the first navigation tab. Perks, enabled zones/effectiveness, Tower
+level, Craftworks slots, inventory capacity and appearance belong to the account.
+Edit the page, then **Save settings**; the planner recalculates on return. Starting
+inventory stays under Primary targets and remains specific to each plan.
+
+Settings have independent named profiles and `FWS1.` backup codes. Loading a
+profile/code fills the form for review; Save settings applies it. Plan saves use
+`FW2.` and retain the active account settings. Importing an old `FW1.` save instead
+replaces the account fields present in that save, preserving newly added defaults.
+The old combined current-plan autosave is migrated once on first load. Named old
+saves stay readable. Clear all and switching planner modes preserve account settings.
+
+Storage keys: `farm-rpg-settings-v1` for active account settings,
+`farm-rpg-settings-profiles-v1` for profiles, `farm-workshop-v1` for the current
+plan, and `farm-workshop-saved-plans-v1` for named plans. They are browser/site
+storage, not cloud accounts. Export both settings and plan codes to transfer them.
+Checks: `node test_global_settings.cjs`, `node test_save.cjs`, and
+`node test_mode_switch.cjs` cover migration, isolation and backward compatibility.

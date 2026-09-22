@@ -41,7 +41,7 @@ function suggestedPlanName(settings,catalogItems){
  document.getElementById('loadNamedPlan').onclick=()=>act(()=>{const plans=read(),p=selected(plans),restored=decodePlanCode(p.code);
   // Keep the current work recoverable without an extra confirmation dialog.
   const backup=snapshot('Before loading '+p.name);if(backup.code!==p.code)plans.push(backup);
-  p.updated=Date.now();write(plans);localStorage.setItem('farm-workshop-v1',JSON.stringify(restored));location.reload();
+  p.updated=Date.now();write(plans);restorePlanCode(p.code);location.reload();
  });
  window.addEventListener('planner-cleared',()=>act(()=>{refresh('');customName=false;name.value='';suggest();status.textContent='';}));
  window.addEventListener('storage',e=>{if(e.key===key)act(()=>refresh());});

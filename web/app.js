@@ -16,39 +16,22 @@ function settingIcons(){document.querySelectorAll('[data-setting-icon]').forEach
 
 let catalog, items={}, state, result=null, selected=0, consumers=[], revision=0, timer, lastSuccess=null;
 
-const defaults={map_planning:false,map_unused_mode:"top",map_unused_count:6,map_expanded_areas:[],map_sources:{},map_source_explores:null,map_node_usage:{},map_use_void:[],map_hidden:[],map_voided:[],tower_level:0,map_positions:{},guided_skipped:[],quest_selection:[],quest_imported_items:{},selected_plan:0,selected_plan_key:"",planner_mode:'goals',production_interval:60,passive_inventory:'{}',craftworks_slots:10,inventory_size:10000,route_method:'AP',route_foods:{},secondary:[],automatic_areas:null,theme:'dark',resource_saver:0,wanderer:0,lemon_squeezer:false,cinnamon:false,cider_rolls:{},effectiveness_upgrades:{},sprint_shoes:0,provided_targets:{},targets:{'167':1000},iron_depot:true,runecube:false,cockatrice_ether_source:false,cockatrice_ether_source:false,mode:'best',max_areas:15,areas:null,inventory:'{}'};
+const defaults={map_planning:false,map_unused_mode:"top",map_unused_count:6,map_expanded_areas:[],map_sources:{},map_source_explores:null,map_node_usage:{},map_use_void:[],map_hidden:[],map_voided:[],tower_level:0,map_positions:{},guided_skipped:[],quest_selection:[],quest_imported_items:{},selected_plan:0,selected_plan_key:"",planner_mode:'goals',production_interval:60,passive_inventory:'{}',craftworks_slots:10,inventory_size:10000,route_method:'AP',route_foods:{},secondary:[],automatic_areas:null,theme:'dark',resource_saver:0,wanderer:0,lemon_squeezer:false,cinnamon:false,cider_rolls:{},effectiveness_upgrades:{},sprint_shoes:0,provided_targets:{},targets:{'167':1000},iron_depot:true,runecube:false,cockatrice_ether_source:false,mode:'best',max_areas:15,areas:null,inventory:'{}'};
 
 async function api(url,body){return browserPlanner.api(url,body);}
 
-
 function theme(){document.documentElement.dataset.theme=state.theme;$('themeToggle').textContent=state.theme==='dark'?'Light mode':'Dark mode';}
 
-$('themeToggle').onclick=()=>{state.theme=state.theme==='dark'?'light':'dark';theme();save();};
-
-for(const [id,key] of [['resourceSaver','resource_saver'],['wanderer','wanderer']])$(id).oninput=$(id).onchange=()=>{if($(id).value===''||!$(id).checkValidity())return;const value=Number($(id).value);if(state[key]===value)return;state[key]=value;if(key==='resource_saver')changed();else{save();refreshCosts();}};
-
-for(const [id,key] of [['lemonSqueezer','lemon_squeezer'],['cinnamon','cinnamon']])$(id).onchange=()=>{state[key]=$(id).checked;save();refreshCosts();};
-
-function refreshCosts(){ciderSettings();if(result&&!$('resultContent').classList.contains('stale')){detail();costPreview();}}
-
-function ciderSettings(){
+function ciderSettings(settings=state){
 
  const ordered=[...catalog.locations].sort((a,b)=>(explorationMenuOrder.indexOf(a.id)<0?999:explorationMenuOrder.indexOf(a.id))-(explorationMenuOrder.indexOf(b.id)<0?999:explorationMenuOrder.indexOf(b.id)));
  const seasonal=a=>['explore:11','explore:14'].includes(a.id);
- const card=a=>{const x=ciderEffectiveness(state,a.id);const rate=x.rolls*.4/a.base_drop_rate;return `<div class="effectivenessrow ${state.areas.includes(a.id)?'enabled':'disabled-area'}"><label class="location-choice"><input type="checkbox" data-location-enabled="${a.id}" ${state.areas.includes(a.id)?'checked':''}>${a.image?`<img class="gameicon" src="${esc(a.image.startsWith('/')?'https://farmrpg.com'+a.image:a.image)}" alt="">`:''}<span>${esc(a.name)}</span></label><span class="location-upgrades-label">Upgrades</span><div class="effectivenesscontrols"><div class="stepper"><button type="button" data-step="-1" data-location="${a.id}" aria-label="Decrease ${esc(a.name)} upgrades" ${x.upgrades===0?'disabled':''}>−</button><input id="effect-${a.id}" data-effect="${a.id}" type="number" min="0" max="10000" step="1" value="${x.upgrades}" aria-label="${esc(a.name)} effectiveness upgrades"><button type="button" data-step="1" data-location="${a.id}" aria-label="Increase ${esc(a.name)} upgrades" ${x.upgrades>=10000?'disabled':''}>+</button></div><output for="effect-${a.id}" title="Estimated normal-explore equivalent per Cider in this area">${fmt(rate)}<small>explores / Cider</small>${x.custom?'<small>Saved custom rate*</small>':''}</output></div>${x.custom?'<small class="hint">*Previous rate preserved. Set upgrades to replace it.</small>':''}</div>`;};
+ const card=a=>{const x=ciderEffectiveness(settings,a.id);const rate=x.rolls*.4/a.base_drop_rate;return `<div class="effectivenessrow ${settings.areas.includes(a.id)?'enabled':'disabled-area'}"><label class="location-choice"><input type="checkbox" data-location-enabled="${a.id}" ${settings.areas.includes(a.id)?'checked':''}>${a.image?`<img class="gameicon" src="${esc(a.image.startsWith('/')?'https://farmrpg.com'+a.image:a.image)}" alt="">`:''}<span>${esc(a.name)}</span></label><span class="location-upgrades-label">Upgrades</span><div class="effectivenesscontrols"><div class="stepper"><button type="button" data-step="-1" data-location="${a.id}" aria-label="Decrease ${esc(a.name)} upgrades" ${x.upgrades===0?'disabled':''}>−</button><input id="effect-${a.id}" data-effect="${a.id}" type="number" min="0" max="10000" step="1" value="${x.upgrades}" aria-label="${esc(a.name)} effectiveness upgrades"><button type="button" data-step="1" data-location="${a.id}" aria-label="Increase ${esc(a.name)} upgrades" ${x.upgrades>=10000?'disabled':''}>+</button></div><output for="effect-${a.id}" title="Estimated normal-explore equivalent per Cider in this area">${fmt(rate)}<small>explores / Cider</small>${x.custom?'<small>Saved custom rate*</small>':''}</output></div>${x.custom?'<small class="hint">*Previous rate preserved. Set upgrades to replace it.</small>':''}</div>`;};
  $('ciderSettings').innerHTML=ordered.filter(a=>!seasonal(a)).map(card).join('')+'<div class="seasonal-zones-heading"><h3>Seasonal zones</h3><p class="hint">Enable these when their holiday events are active.</p></div>'+ordered.filter(seasonal).map(card).join('');
 
 }
 
-function setEffectiveness(id,n){if(!Number.isInteger(n)||n<0||n>10000)return;state.effectiveness_upgrades[id]=n;delete state.cider_rolls[id];save();refreshCosts();}
-
-$('ciderSettings').onchange=e=>{const area=e.target.dataset.locationEnabled;if(area){state.areas=e.target.checked?[...new Set([...state.areas,area])]:state.areas.filter(id=>id!==area);areas();changed();return;}const id=e.target.dataset.effect;if(!id||!e.target.reportValidity())return;setEffectiveness(id,Number(e.target.value));};
-
-$('ciderSettings').onclick=e=>{const b=e.target.closest('[data-step]');if(!b)return;const id=b.dataset.location,step=Number(b.dataset.step);setEffectiveness(id,Number(state.effectiveness_upgrades[id]||0)+step);$('ciderSettings').querySelector(`[data-location="${id}"][data-step="${step}"]`)?.focus();};
-
-$('sprintShoes').onchange=()=>{state.sprint_shoes=Number($('sprintShoes').value);save();refreshCosts();};
-
-function save(){try{localStorage.setItem('farm-workshop-v1',JSON.stringify(state));}catch{}window.dispatchEvent(new Event('planner-settings-saved'));}
+function save(){try{localStorage.setItem('farm-workshop-v1',JSON.stringify(GlobalSettings.planOnly(state)));}catch{}window.dispatchEvent(new Event('planner-settings-saved'));}
 
 function error(message,shortfalls=[]){
  const box=$('error'),token=revision;box.textContent=message;box.hidden=!message;
@@ -66,11 +49,19 @@ function error(message,shortfalls=[]){
 function provideMissingInventory(row,token){
  if(token!==revision)return;
  const stock=inventoryData(),quantity=Number(stock[row.item_id]||0)+row.quantity;
- if(!items[row.item_id]||!Number.isSafeInteger(row.quantity)||row.quantity<=0||!Number.isFinite(quantity)||quantity>1e12){error('That amount exceeds the inventory limit. Adjust Starting inventory in Settings.');return;}
+ if(!items[row.item_id]||!Number.isSafeInteger(row.quantity)||row.quantity<=0||!Number.isFinite(quantity)||quantity>1e12){error('That amount exceeds the inventory limit. Adjust Starting inventory under Primary targets.');return;}
  stock[row.item_id]=quantity;setInventory(stock);inventoryRows();error('');changed();
 }
 
-function route(){const tools=location.hash==='#tools';$('toolsPage').hidden=!tools;$('plannerPage').hidden=tools;document.querySelectorAll('nav a').forEach(a=>a.classList.toggle('active',a.hash===(tools?'#tools':'#explore')));}
+let settingsRecalculationPending=false;
+function route(){
+ const settings=['#settings','#tools'].includes(location.hash);
+ $('settingsPage').hidden=!settings;$('plannerPage').hidden=settings;
+ const version=document.querySelector('.appversion')?.textContent||'';document.title=`${settings?'Settings':'Exploration Planner'} ${version} · psam's FarmRPG Tools`;
+ document.querySelectorAll('nav a').forEach(a=>a.classList.toggle('active',a.hash===(settings?'#settings':'#explore')));
+ window.dispatchEvent(new Event('app-page-changed'));
+ if(!settings&&state&&settingsRecalculationPending){settingsRecalculationPending=false;clearTimeout(timer);calculate();}
+}
 
 window.addEventListener('hashchange',route);route();
 
@@ -146,7 +137,6 @@ $('targets').addEventListener('change',e=>{
 
 function modeHelp(){$('modeHelp').textContent=state.mode==='best'?'Areas with zero explores are removed; duplicate results are merged.':'Every selected area must receive at least one explore. Slower pairs are kept.';}
 
-for(const [id,key] of [['ironDepot','iron_depot'],['runecube','runecube'],['cockatriceEtherSource','cockatrice_ether_source'],['cockatriceEtherSource','cockatrice_ether_source']])$(id).addEventListener('change',()=>{state[key]=$(id).checked;changed();});
 
 $('mode').addEventListener('change',()=>{state.mode=$('mode').value;modeHelp();changed();});
 
@@ -182,7 +172,6 @@ function areas(){$('areaChoices').innerHTML=catalog.locations.map(a=>`<label cla
 
 $('areaChoices').addEventListener('change',()=>{state.areas=[...$('areaChoices').querySelectorAll('input:checked')].map(i=>i.dataset.area);$('areaCount').textContent=`(${state.areas.length})`;changed();});
 
-$('allAreas').onclick=()=>{state.areas=catalog.locations.map(a=>a.id);areas();changed();};$('noAreas').onclick=()=>{state.areas=[];areas();changed();};
 
 $('compute').onclick=()=>{revision++;clearTimeout(timer);calculate();};
 
@@ -244,7 +233,7 @@ $('consumerSearch').oninput=consumerList;$('closeDialog').onclick=()=>{$('consum
 
 $('consumerList').addEventListener('click',e=>{const b=e.target.closest('[data-add-consumer]');if(!b)return;try{addSecondary(b.dataset.addConsumer,suggestionMaterial);$('consumerDialog').close();}catch(e){error(e.message);}});
 
-(async()=>{try{catalog=await api('/api/catalog');if(catalog.planner_api_version!==2)throw Error('The catalog and app versions don’t match. Rebuild the static files and refresh.');items=Object.fromEntries(catalog.items.map(i=>[i.id,i]));let saved;try{saved=JSON.parse(localStorage.getItem('farm-workshop-v1'));}catch{}state=saved?withSettingDefaults(saved):starterPlan();state.secondary=Array.isArray(state.secondary)?state.secondary.filter((r,i,a)=>items[r.item_id]?.craftable&&a.findIndex(x=>x.item_id===r.item_id)===i).map(r=>({item_id:r.item_id,allow_exploration:r.allow_exploration===true,prioritize:r.prioritize===true,automatic_batch:r.automatic_batch===true,user_cap:r.user_cap===true,consumer_mode:r.consumer_mode,demand_group:r.demand_group,demand_basis:r.demand_basis,demand_percent:r.demand_percent,cap:Number.isInteger(r.cap)&&r.cap>=0?r.cap:null,exploration_item_id:explorationIngredients(r.item_id).includes(r.exploration_item_id)?r.exploration_item_id:null})):[];state.targets=Object.fromEntries(Object.entries(state.targets||{}).filter(([id,q])=>eligibleTarget(items[id])&&Number.isInteger(q)&&q>0));state.areas=state.areas===null?catalog.locations.filter(a=>!['explore:11','explore:14'].includes(a.id)).map(a=>a.id):state.areas.filter(id=>catalog.locations.some(a=>a.id===id));$('catalogMeta').textContent=`${catalog.items.filter(eligibleTarget).length} available targets`;$('craftableItems').innerHTML=catalog.items.filter(eligibleTarget).sort((a,b)=>a.name.localeCompare(b.name)).map(i=>`<option value="${esc(i.name)}" label="${esc(i.name)}${globalThis.TOWER_MM.items[i.id]?' · MM · Tower '+globalThis.TOWER_MM.items[i.id].join(', '):''}${globalThis.TOWER_MM.gm_items[i.id]?' · GM · Tower '+globalThis.TOWER_MM.gm_items[i.id].join(', '):''}${i.mailable?' · Mailable':''}"></option>`).join('');settingIcons();theme();$('sprintShoes').value=state.sprint_shoes;ciderSettings();for(const [id,key] of [['resourceSaver','resource_saver'],['wanderer','wanderer']])$(id).value=state[key];for(const [id,key] of [['lemonSqueezer','lemon_squeezer'],['cinnamon','cinnamon']])$(id).checked=state[key];targets();window.dispatchEvent(new Event('planner-settings-saved'));secondaryRows();areas();$('ironDepot').checked=state.iron_depot;$('runecube').checked=state.runecube;$('cockatriceEtherSource').checked=state.cockatrice_ether_source;$('cockatriceEtherSource').checked=state.cockatrice_ether_source;$('mode').value=state.mode;initializeInventory();plannerModeUI();modeHelp();await calculate();if(document.modelContext?.registerTool){Promise.resolve(document.modelContext.registerTool({name:'add_crafting_target',description:'Add a crafting target to the visible list and recalculate the exploration plans.',inputSchema:{type:'object',properties:{item:{type:'string'},quantity:{type:'integer',minimum:1}},required:['item','quantity'],additionalProperties:false},execute:async({item,quantity})=>{const found=Object.values(items).find(i=>i.id===item||i.name===item);if(!found)throw Error('Unknown item');addTarget(found.id,quantity);clearTimeout(timer);await calculate();if(!$('error').hidden)throw Error($('error').textContent);return {targets:state.targets,cheapest_explores:result?.plans[0]?.optimal_total_explores};}})).catch(()=>{});}}catch(e){error(e.message);$('status').textContent='Could not load the catalog.';}})();
+(async()=>{try{catalog=await api('/api/catalog');if(catalog.planner_api_version!==2)throw Error('The catalog and app versions don’t match. Rebuild the static files and refresh.');items=Object.fromEntries(catalog.items.map(i=>[i.id,i]));let saved;try{saved=JSON.parse(localStorage.getItem('farm-workshop-v1'));}catch{}state={...(saved?withSettingDefaults(saved):starterPlan()),...GlobalSettings.initialize(saved,catalog.locations)};state.secondary=Array.isArray(state.secondary)?state.secondary.filter((r,i,a)=>items[r.item_id]?.craftable&&a.findIndex(x=>x.item_id===r.item_id)===i).map(r=>({item_id:r.item_id,allow_exploration:r.allow_exploration===true,prioritize:r.prioritize===true,automatic_batch:r.automatic_batch===true,user_cap:r.user_cap===true,consumer_mode:r.consumer_mode,demand_group:r.demand_group,demand_basis:r.demand_basis,demand_percent:r.demand_percent,cap:Number.isInteger(r.cap)&&r.cap>=0?r.cap:null,exploration_item_id:explorationIngredients(r.item_id).includes(r.exploration_item_id)?r.exploration_item_id:null})):[];state.targets=Object.fromEntries(Object.entries(state.targets||{}).filter(([id,q])=>eligibleTarget(items[id])&&Number.isInteger(q)&&q>0));state.areas=state.areas===null?catalog.locations.filter(a=>!['explore:11','explore:14'].includes(a.id)).map(a=>a.id):state.areas.filter(id=>catalog.locations.some(a=>a.id===id));$('catalogMeta').textContent=`${catalog.items.filter(eligibleTarget).length} available targets`;$('craftableItems').innerHTML=catalog.items.filter(eligibleTarget).sort((a,b)=>a.name.localeCompare(b.name)).map(i=>`<option value="${esc(i.name)}" label="${esc(i.name)}${globalThis.TOWER_MM.items[i.id]?' · MM · Tower '+globalThis.TOWER_MM.items[i.id].join(', '):''}${globalThis.TOWER_MM.gm_items[i.id]?' · GM · Tower '+globalThis.TOWER_MM.gm_items[i.id].join(', '):''}${i.mailable?' · Mailable':''}"></option>`).join('');settingIcons();theme();$('sprintShoes').value=state.sprint_shoes;ciderSettings();for(const [id,key] of [['resourceSaver','resource_saver'],['wanderer','wanderer']])$(id).value=state[key];for(const [id,key] of [['lemonSqueezer','lemon_squeezer'],['cinnamon','cinnamon']])$(id).checked=state[key];targets();window.dispatchEvent(new Event('planner-settings-saved'));secondaryRows();areas();$('ironDepot').checked=state.iron_depot;$('runecube').checked=state.runecube;$('cockatriceEtherSource').checked=state.cockatrice_ether_source;$('cockatriceEtherSource').checked=state.cockatrice_ether_source;$('mode').value=state.mode;initializeInventory();plannerModeUI();modeHelp();window.dispatchEvent(new Event('global-settings-ready'));if($('plannerPage').hidden)settingsRecalculationPending=true;else await calculate();if(document.modelContext?.registerTool){Promise.resolve(document.modelContext.registerTool({name:'add_crafting_target',description:'Add a crafting target to the visible list and recalculate the exploration plans.',inputSchema:{type:'object',properties:{item:{type:'string'},quantity:{type:'integer',minimum:1}},required:['item','quantity'],additionalProperties:false},execute:async({item,quantity})=>{const found=Object.values(items).find(i=>i.id===item||i.name===item);if(!found)throw Error('Unknown item');addTarget(found.id,quantity);clearTimeout(timer);await calculate();if(!$('error').hidden)throw Error($('error').textContent);return {targets:state.targets,cheapest_explores:result?.plans[0]?.optimal_total_explores};}})).catch(()=>{});}}catch(e){error(e.message);$('status').textContent='Could not load the catalog.';$('globalSettingsStatus').textContent='Could not load settings: '+e.message;}})();
 
 
 
@@ -333,11 +322,10 @@ $('bringNeeds').onclick=()=>{
 
 $('secondaryRows').onchange=e=>{const priority=e.target.dataset.secondaryPrioritize;if(priority!==undefined){state.secondary[Number(priority)].prioritize=e.target.checked;changed();return;}const cap=e.target.dataset.secondaryCap;if(cap!==undefined){if(!e.target.reportValidity())return;state.secondary[Number(cap)].cap=e.target.value===''?null:Number(e.target.value);changed();return;}const i=e.target.dataset.secondaryExplore;if(i===undefined)return;state.secondary[Number(i)].allow_exploration=e.target.checked;changed();};
 
-$('inventorySize').onchange=()=>{if(!$('inventorySize').reportValidity())return;state.inventory_size=Number($('inventorySize').value);save();renderRoute();};
 
 $('routeMethod').onchange=()=>{state.route_method=$('routeMethod').value;save();renderRoute();};
 
-function renderRoute(){if(!result||$('resultContent').classList.contains('stale'))return;$('routePanel').hidden=false;$('routeTotal').textContent=fmt(result.plans[selected].optimal_total_explores)+' expected explores';$('routePanel').classList.remove('stale');$('craftworksSlots').value=state.craftworks_slots||10;$('routeOption').hidden=state.planner_mode!=='passive';$('inventorySize').value=state.inventory_size||10000;$('routeMethod').value=state.route_method||'AP';$('routeOption').textContent=state.planner_mode==='passive'?`Per ${state.production_interval===10?'10 minutes':'hour'} of production`:'';renderRouteFoods();
+function renderRoute(){if(!result||$('resultContent').classList.contains('stale'))return;$('routePanel').hidden=false;$('routeTotal').textContent=fmt(result.plans[selected].optimal_total_explores)+' expected explores';$('routePanel').classList.remove('stale');$('routeOption').hidden=state.planner_mode!=='passive';$('routeMethod').value=state.route_method||'AP';$('routeOption').textContent=state.planner_mode==='passive'?`Per ${state.production_interval===10?'10 minutes':'hour'} of production`:'';renderRouteFoods();
 
  try{const p=result.plans[selected],r=inventoryRoute(p,items,catalog.locations,state),drink=r.method==='AP'?'APs':'Ciders';
 
@@ -367,7 +355,6 @@ function craftworksSetup(plan,loop){
  return `<div class="sectiontitle"><h3>Craftworks by location</h3></div><p class="hint"><strong>${loop.minimumContinuousSlots} slots</strong> fit all planned recipes.${!loop.continuous?` <strong>${loop.minimumStopSlots} slots</strong> fit the largest additional checkpoint in this schedule.`:''} Follow the setups below in route order. Run numbered sets in order and keep their outputs for later crafts.</p>${sections||'<p class="hint">No crafting needed.</p>'}<p class="hint">Amounts are averages per loop. Skip completed recipes. This schedule estimates inventory use; Craftworks tick and swap times are not modeled.</p>`;
 }
 
-$('craftworksSlots').addEventListener('change',e=>{if(!e.target.reportValidity())return;state.craftworks_slots=Number(e.target.value);save();renderRoute();});
 
 
 
@@ -384,9 +371,42 @@ const routeFoodChoices={AP:[['chowder','Quandary Chowder','+10% drops · 5 min']
 function renderRouteFoods(){const method=state.route_method||'AP',foods=state.route_foods||{};$('routeFoods').innerHTML=routeFoodChoices[method].map(([key,name,note])=>{const id=Object.values(items).find(i=>i.name===name)?.id;return `<label class="routefood"><input type="checkbox" data-route-food="${key}" ${foods[key]?'checked':''}><span>${itemName(id,name)}<small>${note}</small></span></label>`;}).join('');$('routeFoodNote').textContent='Keep the selected foods active while following the route. Eat again when they run out.'+(method==='AP'&&foods.chowder&&foods.seltzer?' Chowder + Seltzer uses the conservative +60% drop estimate; the comparison retains the stacking range.':'')+((method==='AP'&&foods.pie)||(method==='Cider'&&foods.cabbage)?' Visits round up to multiples of 5 drinks. This often uses extra drinks and adds explores (and stamina when using Cider). Inventory is checked before each click.':'');}
 $('routeFoods').onchange=e=>{const key=e.target.dataset.routeFood;if(!key)return;state.route_foods={...state.route_foods,[key]:e.target.checked};save();renderRoute();};
 function renderNonCraftingDrops(plan){const ingredients=craftingIngredientIds(),rows=plan.item_balances.filter(b=>!ingredients.has(b.item_id)&&b.expected_exploration_drops>1e-8).sort((a,b)=>b.expected_exploration_drops-a.expected_exploration_drops);$('nonCraftingDrops').innerHTML=`<p class="hint">Expected exploration drops for the selected plan, before whole-drink rounding. These items are not ingredients in any catalog recipe.</p><table><thead><tr><th>Item</th><th>Expected collected</th></tr></thead><tbody>${rows.map(b=>`<tr><td>${itemName(b.item_id,b.name)}</td><td>${fmt(b.expected_exploration_drops)}</td></tr>`).join('')||'<tr><td colspan="2">None</td></tr>'}</tbody></table>`;}
-function encodePlanCode(value){return 'FW1.'+btoa(Array.from(new TextEncoder().encode(JSON.stringify({version:1,settings:value})),b=>String.fromCharCode(b)).join(''));}
+function encodePlanCode(value){return 'FW2.'+btoa(Array.from(new TextEncoder().encode(JSON.stringify({version:2,settings:GlobalSettings.planOnly(value)})),b=>String.fromCharCode(b)).join(''));}
+function parsePlanCode(code){
+ if(typeof code!=='string'||code.length>2000000||!/^FW[12]\./.test(code.trim()))throw Error('Invalid or unsupported plan code.');
+ const data=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(Uint8Array.from(atob(code.trim().slice(4)),c=>c.charCodeAt(0))));
+ if(![1,2].includes(data.version)||code.trim().slice(0,4)!==`FW${data.version}.`||!data.settings||typeof data.settings!=='object'||Array.isArray(data.settings))throw Error('Invalid or unsupported plan code.');
+ return data;
+}
 function decodePlanCode(code){
- try{if(typeof code!=='string'||code.length>2000000||!code.trim().startsWith('FW1.'))throw Error();const data=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(Uint8Array.from(atob(code.trim().slice(4)),c=>c.charCodeAt(0))));if(data.version!==1||!data.settings||typeof data.settings!=='object'||Array.isArray(data.settings))throw Error();return validatePlanSettings(data.settings);}catch(e){throw Error('Invalid or unsupported plan code. '+(e.message?.startsWith('Plan:')?e.message:''));}
+ try{
+  const data=parsePlanCode(code),current=GlobalSettings.read(catalog.locations);
+  const account=GlobalSettings.validate({...current,...(data.version===1?GlobalSettings.pick(data.settings):{})},catalog.locations);
+  return validatePlanSettings({...GlobalSettings.planOnly(data.settings),...account});
+ }catch(e){throw Error('Invalid or unsupported plan code. '+(/^(Plan:|Invalid setting:)/.test(e.message)?e.message:''));}
+}
+function restorePlanCode(code){
+ const restored=decodePlanCode(code),legacy=parsePlanCode(code).version===1;
+ // Validate both halves before changing either saved value. Roll back if storage
+ // fails so a failed import does not silently switch the account settings.
+ const previous=localStorage.getItem(GlobalSettings.key);
+ try{
+  if(legacy)GlobalSettings.write(restored,catalog.locations);
+  localStorage.setItem('farm-workshop-v1',JSON.stringify(GlobalSettings.planOnly(restored)));
+ }catch(e){if(legacy){if(previous===null)localStorage.removeItem(GlobalSettings.key);else localStorage.setItem(GlobalSettings.key,previous);}throw e;}
+ return restored;
+}
+function applyAccountSettings(value){
+ const next=GlobalSettings.write(value,catalog.locations);
+ Object.assign(state,next);theme();save();areas();
+ // Keep the last completed plan visible until it can be recalculated. Settings
+ // editing itself never starts a solver job.
+ revision++;clearTimeout(timer);browserPlanner.cancel();
+ $('resultContent').classList.add('stale');$('status').classList.remove('loading');$('compute').disabled=false;
+ $('status').textContent='Settings saved. Your plan will update when you return.';
+ settingsRecalculationPending=true;
+ window.dispatchEvent(new Event('global-settings-applied'));
+ if(!$('plannerPage').hidden){settingsRecalculationPending=false;calculate();}
 }
 // Fill new settings without merging user data (targets, lists, inventory maps).
 function starterPlan(){
@@ -408,6 +428,7 @@ function withSettingDefaults(input){
 }
 function validatePlanSettings(input){
  const fail=m=>{throw Error('Plan: '+m);},object=v=>v&&typeof v==='object'&&!Array.isArray(v),out=withSettingDefaults(input);
+ Object.assign(out,GlobalSettings.validate(GlobalSettings.pick(input),catalog.locations));
  if(!['all','top','none'].includes(out.map_unused_mode))fail('Invalid unused materials display');
  if(!Number.isInteger(out.map_unused_count)||out.map_unused_count<1||out.map_unused_count>1000)fail('Invalid unused materials count');
  if(!Array.isArray(out.map_expanded_areas)||out.map_expanded_areas.some(id=>typeof id!=='string'))fail('Invalid expanded locations');
@@ -433,7 +454,7 @@ function validatePlanSettings(input){
  if(!object(out.provided_targets)||Object.entries(out.provided_targets).some(([id,r])=>!out.targets[id]||!object(r)||!Number.isSafeInteger(r.quantity)||r.quantity<1||r.quantity>out.targets[id]||!Number.isFinite(r.taken)||r.taken<0||r.taken>r.quantity))fail('Invalid provided targets');
  if(!Array.isArray(out.secondary))fail('Invalid leftover targets');const seen=new Set();
  for(const r of out.secondary){if(!object(r)||!items[r.item_id]?.craftable||seen.has(r.item_id)||typeof r.allow_exploration!=='boolean'||r.cap!=null&&(!Number.isInteger(r.cap)||r.cap<0||r.cap>100000000))fail('Invalid leftover target');if(r.consumer_mode!=null&&!['available','fixed'].includes(r.consumer_mode))fail('Invalid craft mode');if(r.user_cap!=null&&typeof r.user_cap!=='boolean')fail('Invalid craft limit');if(r.automatic_batch!=null&&typeof r.automatic_batch!=='boolean')fail('Invalid automatic batch');if(r.prioritize!=null&&typeof r.prioritize!=='boolean')fail('Invalid priority option');if(r.exploration_item_id!=null&&!explorationIngredients(r.item_id).includes(r.exploration_item_id))fail('Invalid exploration ingredient');seen.add(r.item_id);}
- if(out.areas!==null&&(!Array.isArray(out.areas)||!out.areas.length||out.areas.some(id=>!catalog.locations.some(a=>a.id===id))))fail('Invalid areas');
+ if(out.areas!==null&&(!Array.isArray(out.areas)||out.areas.some(id=>!catalog.locations.some(a=>a.id===id))))fail('Invalid areas');
  for(const k of ['effectiveness_upgrades','cider_rolls']){if(!object(out[k]))fail('Invalid '+k);for(const [id,n] of Object.entries(out[k]))if(!catalog.locations.some(a=>a.id===id)||!Number.isFinite(n)||n<0||n>100000000)fail('Invalid '+k);}
  if(!object(out.route_foods)||Object.entries(out.route_foods).some(([k,v])=>!['chowder','seltzer','pie','neigh','cabbage'].includes(k)||typeof v!=='boolean'))fail('Invalid foods');
  if(![10,60].includes(out.production_interval))fail('Invalid production period');
@@ -442,7 +463,7 @@ function validatePlanSettings(input){
 }
 $('generatePlanCode').onclick=()=>{try{$('planCode').value=encodePlanCode(validatePlanSettings(state));$('planCodeStatus').textContent='Code generated. Copy it somewhere to keep this plan.';}catch(e){$('planCodeStatus').textContent=e.message;}};
 $('copyPlanCode').onclick=async()=>{try{if(!$('planCode').value)$('generatePlanCode').click();if(!$('planCode').value)return;await navigator.clipboard.writeText($('planCode').value);$('planCodeStatus').textContent='Plan code copied.';}catch{$('planCode').select();$('planCodeStatus').textContent='Select and copy the code with Ctrl+C.';}};
-$('loadPlanCode').onclick=()=>{try{const restored=decodePlanCode($('planCode').value);localStorage.setItem('farm-workshop-v1',JSON.stringify(restored));location.reload();}catch(e){$('planCodeStatus').textContent=e.message;}};
+$('loadPlanCode').onclick=()=>{try{restorePlanCode($('planCode').value);location.reload();}catch(e){$('planCodeStatus').textContent=e.message;}};
 
 function resetEmptyPlan(){targetRanking=[];targetSavings=null;startingSupplyReport(null);browserPlanner.cancel();result=null;selected=0;state.selected_plan=0;state.selected_plan_key="";save();lastSuccess=null;$('empty').hidden=false;$('resultContent').hidden=true;$('resultContent').classList.remove('stale');$('routePanel').hidden=true;$('status').textContent='Add a crafting or collection target to start.';$('compute').disabled=false;$('status').classList.remove('loading');$('implicitCrafts').innerHTML='';$('rawMaterials').innerHTML='';secondaryRows(false);}
 $('clearPlan').onclick=()=>{if(state)$('clearPlanDialog').showModal();};
@@ -457,11 +478,11 @@ $('confirmClearPlan').onclick=()=>{
  window.dispatchEvent(new Event('planner-cleared'));
 };
 function plannerModeUI(){const passive=state.planner_mode==='passive';document.querySelectorAll('[data-planner-mode]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.plannerMode===state.planner_mode)));$('productionInterval').value=state.production_interval;$('primaryInputs').hidden=passive;$('passiveInputs').hidden=!passive;$(passive?'passiveInventoryHome':'startingInventoryHome').appendChild($('inventorySection'));$('inventorySection').open=passive;$('secondarySection').querySelector('h2').textContent=passive?'Use production for':'Explicitly use leftovers for';$('inventoryLabel').textContent=passive?'Production amounts per period':'Starting inventory';inventoryRows();}
-function blankModeSettings(current,mode){return {...JSON.parse(JSON.stringify(defaults)),theme:current.theme,planner_mode:mode,targets:{}};}
+function blankModeSettings(current,mode){return {...JSON.parse(JSON.stringify(defaults)),...GlobalSettings.pick(current),planner_mode:mode,targets:{}};}
 function hasPlanContent(current){
  const blank=blankModeSettings(current,current.planner_mode);
  return Object.keys(blank).some(key=>{
-  if(['theme','planner_mode'].includes(key))return false;
+  if(key==='planner_mode'||GlobalSettings.keys.includes(key))return false;
   if(['inventory','passive_inventory'].includes(key)){try{return Object.values(JSON.parse(current[key]||'{}')).some(q=>Number(q)>0);}catch{return true;}}
   if(key==='areas'&&current.areas?.length===catalog.locations.length&&catalog.locations.every(a=>current.areas.includes(a.id)))return false;
   return JSON.stringify(current[key]??blank[key])!==JSON.stringify(blank[key]);
@@ -470,7 +491,7 @@ function hasPlanContent(current){
 let pendingPlannerMode=null;
 function commitPlannerMode(){
  if(!pendingPlannerMode)return;
- localStorage.setItem('farm-workshop-v1',JSON.stringify(blankModeSettings(state,pendingPlannerMode)));
+ localStorage.setItem('farm-workshop-v1',JSON.stringify(GlobalSettings.planOnly(blankModeSettings(state,pendingPlannerMode))));
  location.reload();
 }
 function requestPlannerMode(mode){

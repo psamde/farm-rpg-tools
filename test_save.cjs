@@ -1,15 +1,18 @@
 const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
 const source=fs.readFileSync('web/app.js','utf8');
-const c={TextEncoder,TextDecoder,btoa,atob,items:{raw:{explorable:true,craftable:false},craft:{craftable:true},bad:{craftable:false}},catalog:{locations:[{id:'area'}]}};vm.createContext(c);
+const store=new Map();
+const c={localStorage:{getItem:k=>store.get(k)||null,setItem:(k,v)=>store.set(k,v),removeItem:k=>store.delete(k)},TextEncoder,TextDecoder,btoa,atob,items:{raw:{explorable:true,craftable:false},craft:{craftable:true},bad:{craftable:false}},catalog:{locations:[{id:'area'}]}};vm.createContext(c);
+vm.runInContext(fs.readFileSync('web/global-settings.js','utf8'),c);
 vm.runInContext(source.match(/const defaults=.*?;/)[0]+';globalThis.base=defaults;',c);
 vm.runInContext(source.slice(source.indexOf('function eligibleTarget('),source.indexOf('function addTarget(')),c);
 vm.runInContext(source.slice(source.indexOf('function encodePlanCode('),source.indexOf("$('generatePlanCode').onclick")),c);
 vm.runInContext(source.slice(source.indexOf('function explorationIngredients('),source.indexOf('function addSecondary(')),c);
 const input={...c.base,targets:{raw:200,craft:10},areas:['area'],secondary:[{item_id:'craft',cap:5,allow_exploration:true}],inventory:'{"raw":3}',route_foods:{neigh:true},resource_saver:45};
+c.GlobalSettings.write(input,c.catalog.locations);
 assert.deepEqual(JSON.parse(JSON.stringify(c.decodePlanCode(c.encodePlanCode(input)))),JSON.parse(JSON.stringify(input)));
 assert.throws(()=>c.decodePlanCode('bad'));
 assert.throws(()=>c.decodePlanCode(c.encodePlanCode({...input,targets:{bad:1}})));
-assert.throws(()=>c.decodePlanCode(c.encodePlanCode({...input,resource_saver:99})));
+assert.equal(c.decodePlanCode(c.encodePlanCode({...input,resource_saver:99})).resource_saver,45,'new plan codes cannot change global settings');
 assert.throws(()=>c.decodePlanCode(c.encodePlanCode({...input,secondary:[{item_id:'raw',cap:null,allow_exploration:true}]})));
 console.log('Plan-code roundtrip, invalid data, and eligible target checks passed');
 
@@ -18,7 +21,8 @@ assert.equal(c.decodePlanCode(c.encodePlanCode(passive)).passive_inventory,passi
 assert.equal(c.decodePlanCode(c.encodePlanCode(passive)).production_interval,10);
 console.log('Passive save codes preserve production period and independent supplies');
 
-const oldCode=c.encodePlanCode({targets:{raw:200},areas:['area'],performance:{cache_primary:true}});
+const legacy=value=>'FW1.'+btoa(JSON.stringify({version:1,settings:value}));
+const oldCode=legacy({targets:{raw:200},areas:['area'],performance:{cache_primary:true}});
 // Add catalog entries after the save was made; existing references still load.
 c.items.newItem={craftable:true};c.catalog.locations.push({id:'new-area'});
 const restored=c.decodePlanCode(oldCode);
@@ -110,3 +114,22 @@ console.log('Provided goals and reserved quantities survive save/load; old saves
 
 const partialSupply={...input,provided_targets:{raw:{quantity:50,taken:3}},inventory:'{"raw":0}'};
 assert.deepEqual(JSON.parse(JSON.stringify(c.decodePlanCode(c.encodePlanCode(partialSupply)).provided_targets)),partialSupply.provided_targets);
+
+const newCode=c.encodePlanCode(input),encoded=JSON.parse(atob(newCode.slice(4)));
+assert.equal(encoded.version,2);for(const k of c.GlobalSettings.keys)assert.equal(Object.hasOwn(encoded.settings,k),false,k+' omitted from plan');
+c.GlobalSettings.write({...input,resource_saver:20,inventory_size:20000},c.catalog.locations);
+assert.equal(c.decodePlanCode(newCode).resource_saver,20);assert.equal(c.decodePlanCode(newCode).inventory_size,20000);
+c.restorePlanCode(newCode);assert.equal(c.GlobalSettings.read().resource_saver,20);
+const oldFull=legacy({...input,resource_saver:30,inventory_size:12345});
+assert.equal(c.decodePlanCode(oldFull).resource_saver,30);assert.equal(c.GlobalSettings.read().resource_saver,20,'decoding is read-only');
+c.restorePlanCode(oldFull);assert.equal(c.GlobalSettings.read().resource_saver,30);assert.equal(c.GlobalSettings.read().inventory_size,12345);
+const active=JSON.parse(store.get('farm-workshop-v1'));assert.equal(active.resource_saver,undefined);assert.equal(active.targets.raw,200);
+c.restorePlanCode(legacy({targets:{raw:42}}));assert.equal(c.GlobalSettings.read().resource_saver,30,'missing legacy settings preserve current values');
+assert.throws(()=>c.restorePlanCode(legacy({...input,resource_saver:99})));assert.equal(c.GlobalSettings.read().resource_saver,30);
+assert.throws(()=>c.decodePlanCode(c.GlobalSettings.encode(input)),'settings code is not a plan');
+console.log('FW2 excludes account settings; FW1 imports override only saved account fields after validation; new plan loads preserve current settings.');
+
+c.GlobalSettings.defaults.future_perk=false;
+c.GlobalSettings.write({...c.GlobalSettings.read(),future_perk:true},c.catalog.locations);
+assert.equal(c.decodePlanCode(newCode).future_perk,true,'new account fields survive loading an older plan');
+c.restorePlanCode(legacy({targets:{raw:8}}));assert.equal(c.GlobalSettings.read().future_perk,true,'legacy imports keep account fields absent from old saves');
