@@ -27,7 +27,7 @@ assert.equal(withIdle.inputs[0].node.id,'area:desert');
 // Exercise the real inspector/picker handlers without a browser or solver.
 const elements=new Map();
 function el(id){if(!elements.has(id))elements.set(id,{value:'',innerHTML:'',classList:{contains:()=>false},addEventListener(){},before(){},after(){},setAttribute(){},querySelectorAll:()=>[],scrollTop:0});return elements.get(id);}
-const ctx=vm.createContext({...model,items,result:null,state:structuredClone(settings),document:{createElement:()=>el('section')},$:el,window:{addEventListener(){}},itemName:(_id,name)=>name,esc:String,fmt:String,inventoryData:()=>({}),setTimeout:()=>1,clearTimeout(){},towerOpportunity:()=>null,api:async()=>[{id:'plate',name:'Steel Plate',direct:true},{id:'idle',name:'Idle craft',direct:true},{id:'switch',name:'Kill Switch',direct:false}]});
+const ctx=vm.createContext({...model,items,catalog:{locations:[]},itemIcon:id=>`<img class="gameicon" alt="" data-icon="${id}">`,result:null,state:structuredClone(settings),document:{createElement:()=>el('section')},$:el,window:{addEventListener(){}},itemName:(_id,name)=>name,esc:String,fmt:String,inventoryData:()=>({}),setTimeout:()=>1,clearTimeout(){},towerOpportunity:()=>null,api:async()=>[{id:'plate',name:'Steel Plate',direct:true},{id:'idle',name:'Idle craft',direct:true},{id:'switch',name:'Kill Switch',direct:false}]});
 vm.runInContext(fs.readFileSync('web/craft-map.js','utf8'),ctx);
 ctx.fixture=graph;
 vm.runInContext(`mapGraph=fixture;mapRender=()=>{};mapCraftAddOptions=()=>({all:10,available:10});mapCraftGaps=()=>[];mapPotential={goals:[]};mapQueuePreview=()=>{};mapChanged=()=>{};`,ctx);
@@ -37,6 +37,15 @@ vm.runInContext(`mapGraph=fixture;mapRender=()=>{};mapCraftAddOptions=()=>({all:
  assert.match(el('mapInspector').innerHTML,/Void\/Sell surplus/);
  assert.match(el('mapInspector').innerHTML,/data-map-jump="plate"/);
  assert.match(el('mapInspector').innerHTML,/data-map-jump="switch"/);
+ assert.match(el('mapInspector').innerHTML,/class="map-connection-grid"/);
+ assert.match(el('mapInspector').innerHTML,/aria-label="Steel Plate · 10"/);
+ assert.match(el('mapInspector').innerHTML,/title="Steel Plate · 10"/);
+ assert.ok(!el('mapInspector').innerHTML.includes('mapDemandPercent'));
+ assert.ok(!el('mapInspector').innerHTML.includes('mapSetDemand'));
+ assert.ok(!el('mapInspector').innerHTML.includes('mapMeetPotential'));
+ const useButton=el('mapInspector').innerHTML.match(/<button id="mapRawUseVoid"[^>]*>/)[0];
+ assert.ok(!useButton.includes('disabled'),'a required downstream craft enables Use + Void too');
+ assert.match(el('mapInspector').innerHTML,/Add a leftover craft to use more/);
  await vm.runInContext("mapConsumers('bolt')",ctx);
  const listing=el('mapCraftList').innerHTML;
  assert.match(listing,/Already in map · 12 crafts/);
@@ -53,5 +62,21 @@ vm.runInContext(`mapGraph=fixture;mapRender=()=>{};mapCraftAddOptions=()=>({all:
  await vm.runInContext("mapConsumers('bolt')",ctx);
  assert.match(el('mapCraftList').innerHTML,/Go to Steel Plate/);
  assert.ok(!el('mapCraftList').innerHTML.includes('data-map-add="plate"'),'an explicit craft cannot be added twice');
+ // Selecting Use + Void on a required-only ingredient changes that node,
+ // without changing the fixed target or creating a new optional craft.
+ ctx.state.secondary=[];
+ vm.runInContext("mapOriginal=null;mapSelect('control')",ctx);
+ el('mapRawUseVoid').onclick();
+ assert.equal(ctx.state.map_node_usage.control.mode,'use');
+ assert.equal(ctx.state.targets.switch,6);
+ assert.equal(ctx.state.secondary.length,0);
+ const shortagePlan={item_balances:[{item_id:'bolt',original_leftover_pool:0.03,used_by_leftover_craft:0,consumed_by_crafting:100}],secondary:{targets:[{item_id:'idle',crafts:0,cap:null,missing_for_next_craft:[{item_id:'bolt',quantity:.97}]}]}};
+ assert.deepEqual(model.craftMapShortages(shortagePlan,'idle').map(r=>[r.item_id,r.primary]),[['bolt',true]]);
+ shortagePlan.item_balances[0].used_by_leftover_craft=10;
+ assert.equal(model.craftMapShortages(shortagePlan,'idle')[0].primary,false);
+ shortagePlan.secondary.targets[0].crafts=1000;
+ assert.deepEqual(model.craftMapShortages(shortagePlan,'idle'),[],'no rounding warnings on successful crafts');
+ shortagePlan.secondary.targets[0].crafts=0;shortagePlan.secondary.targets[0].cap=0;
+ assert.deepEqual(model.craftMapShortages(shortagePlan,'idle'),[],'a paused craft is not a supply shortage');
  console.log('Required surplus labels, protected quantities, connected-node navigation and existing-recipe choices passed.');
 })().catch(error=>{console.error(error);process.exitCode=1;});

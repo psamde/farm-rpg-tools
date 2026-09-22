@@ -62,8 +62,11 @@ html[data-theme=dark] .map-choice-availability.ready{color:#9cd4ad}
 .map-connections{display:grid;gap:12px;margin:14px 0;padding:12px 0;border-block:1px solid var(--line)}
 .map-connections h4{display:flex;gap:8px;align-items:center;margin:0 0 6px;font-size:11px;color:var(--muted)}
 .map-connections h4 small{font-weight:400}
-.craft-map .map-connection{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;padding:7px 8px;margin:4px 0;text-align:left;font-size:11px}
-.map-connection>span:first-child{min-width:0;flex:1}.map-connection .itemname{flex-wrap:wrap}.map-connection small{display:block;margin-top:4px;font-size:10px;color:var(--muted)}
+.map-connection-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}
+.craft-map .map-connection{display:flex;align-items:center;justify-content:center;width:100%;min-width:0;min-height:44px;padding:6px;margin:0;border-radius:8px}
+.map-connection .gameicon{width:28px;height:28px;object-fit:contain;pointer-events:none}
+.map-connection:focus-visible{outline:2px solid #48816d;outline-offset:2px}
+.map-connection .map-source-icon{font-size:22px}
 .map-required-use{padding:8px 10px;border-left:2px solid #75ad85;background:#75ad8512;line-height:1.5}
 .map-existing-choice{display:grid;gap:8px}.map-existing-choice>small{color:var(--muted);font-size:11px}
 .craft-map .map-existing-link{width:100%;margin-top:8px;font-size:11px}
@@ -73,3 +76,7 @@ html[data-theme=dark] .map-choice-availability.ready{color:#9cd4ad}
 .map-source-coverage{display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-top:5px}
 
 .map-node-label{flex-wrap:wrap}.map-node-label>.mailablebadge{font-size:8px;padding:2px 4px}
+
+.craft-map .map-shortage-link{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;text-align:left}
+.map-shortage-link small{display:block;margin-top:5px;color:var(--muted);font-size:11px}
+@media(max-width:380px){.map-connection-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}

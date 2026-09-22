@@ -31,6 +31,17 @@ function craftMapMissingInputs(items,nodes,itemId){
  visit(itemId);
  return missing.sort((a,b)=>items[a].name.localeCompare(items[b].name));
 }
+// Solver shortages are useful when a recipe makes zero, including when its
+// ingredients exist in the route but have already been reserved or consumed.
+function craftMapShortages(plan,itemId){
+ const goal=plan?.secondary?.targets?.find(g=>g.item_id===itemId);
+ if(!goal||goal.crafts>=1||goal.cap===0)return [];
+ return (goal.missing_for_next_craft||[]).filter(r=>r.quantity>1e-8).map(r=>{
+  const balance=plan.item_balances.find(b=>b.item_id===r.item_id);
+  const primary=!!balance&&(balance.original_leftover_pool??Infinity)<r.quantity&&(balance.used_by_leftover_craft||0)<1e-8&&((balance.consumed_by_crafting||0)+(balance.reserved_target_output||0)>0);
+  return {...r,primary};
+ });
+}
 function craftMapIsSoft(goal){
  if(goal.consumer_mode==='fixed')return false;
  return goal.consumer_mode==='available'||goal.available_only===true||goal.cap===null;
@@ -118,7 +129,7 @@ function layoutCraftMap(nodes,previous={}){
  }}
  return positions;
 }
-if(typeof module!=='undefined')module.exports={buildCraftMap,towerOpportunity,layoutCraftMap,craftMapExternalSource,craftMapInventoryNeed,craftMapMissingInputs,craftMapAutoSupplied};
+if(typeof module!=='undefined')module.exports={buildCraftMap,towerOpportunity,layoutCraftMap,craftMapExternalSource,craftMapInventoryNeed,craftMapMissingInputs,craftMapShortages,craftMapAutoSupplied};
 
 // Source lanes describe this route's contributions, not all potential catalog drops.
 function laneLayoutCraftMap(nodes,links,items,areaOrder=[]){
