@@ -2,20 +2,24 @@
 const browserPlanner=(()=>{
  let bundle,worker=null,active=null,serial=0;const jobs=new Map();
  const version=document.querySelector('.appversion')?.textContent.trim()||'dev';
+ function activity(id,data,action){if(typeof CustomEvent==='function')globalThis.dispatchEvent?.(new CustomEvent('planner-activity',{detail:{id,action,status:data.status,message:data.message}}));}
  function asset(name){const url=new URL(name,document.baseURI);url.searchParams.set('v',version);return url;}
  async function data(){return bundle??=fetch(asset('catalog.json')).then(r=>{if(!r.ok)throw Error('Could not load catalog');return r.json();});}
- function cancel(){if(worker&&active){worker.terminate();worker=null;}if(active&&jobs.has(active))jobs.set(active,{status:'error',error:'Superseded by a newer plan.'});active=null;}
+ function cancel(){if(worker&&active){worker.terminate();worker=null;}if(active&&jobs.has(active))jobs.set(active,{status:'error',error:'Superseded by a newer plan.'});if(active)activity(active,{status:'cancelled'});active=null;}
  async function api(url,payload){
-  if(url==='/api/catalog')return (await data()).metadata;
+  if(url==='/api/catalog'){activity('catalog',{status:'queued'},'catalog');try{const metadata=(await data()).metadata;activity('catalog',{status:'complete'},'catalog');return metadata;}catch(error){activity('catalog',{status:'error'},'catalog');throw error;}}
   if(url.startsWith('/api/item/')){const c=(await data()).catalog,item=c.items[url.split('/').at(-1)];if(!item)throw Error('Item not found');return {item,sources:item.source_ids.map(id=>{const s=c.sources[id];return {...s,location_name:c.locations[s.location_id]?.name};})};}
   if(url.startsWith('/api/consumers/')){const c=(await data()).catalog,ref=url.split('/').at(-1),seen=new Set(),queue=[ref];while(queue.length){const id=queue.pop();for(const parent of Object.keys(c.items[id].used_in||{}))if(!seen.has(parent)){seen.add(parent);queue.push(parent);}}return [...seen].map(id=>({id,name:c.items[id].name,direct:Object.hasOwn(c.items[id].direct_ingredients,ref)})).sort((a,b)=>a.name.localeCompare(b.name));}
   if(url==='/api/plan'){
    if(active)cancel();const id=String(++serial);active=id;jobs.set(id,{status:'queued'});
+   activity(id,{status:'queued'},payload.action);
    while(jobs.size>8)jobs.delete(jobs.keys().next().value);
-   if(!worker)worker=new Worker(asset('python-worker.js'));
-   worker.onmessage=({data})=>{if(active!==id)return;jobs.set(id,data);if(data.status==='complete'||data.status==='error')active=null;};
-   worker.onerror=e=>{if(active!==id)return;jobs.set(id,{status:'error',error:e.message||'Browser calculation failed.'});active=null;worker?.terminate();worker=null;};
-   worker.postMessage(payload);return {job_id:id};
+   try{
+    if(!worker)worker=new Worker(asset('python-worker.js'));
+    worker.onmessage=({data})=>{if(active!==id)return;jobs.set(id,data);activity(id,data,payload.action);if(data.status==='complete'||data.status==='error')active=null;};
+    worker.onerror=e=>{if(active!==id)return;jobs.set(id,{status:'error',error:e.message||'Browser calculation failed.'});activity(id,{status:'error'},payload.action);active=null;worker?.terminate();worker=null;};
+    worker.postMessage(payload);return {job_id:id};
+   }catch(error){activity(id,{status:'error'},payload.action);active=null;worker?.terminate();worker=null;throw error;}
   }
   if(url.startsWith('/api/jobs/'))return jobs.get(url.split('/').at(-1))||{status:'error',error:'Plan was replaced.'};
   throw Error('Unknown local request');

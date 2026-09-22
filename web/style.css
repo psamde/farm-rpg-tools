@@ -168,10 +168,7 @@ body.reordering,body.reordering *{cursor:grabbing!important;user-select:none!imp
 
 /* Keep calculation progress visible above the planner inputs. */
 #status.plannerprogress{padding:12px 16px;margin:0 0 16px;font-size:14px;line-height:1.5;min-height:46px}
-#status.plannerprogress.loading{position:sticky;top:12px;z-index:20;animation:none;box-shadow:0 4px 16px #0002;display:flex;align-items:center;gap:10px}
-#status.plannerprogress.loading::before{content:"";width:14px;height:14px;flex:0 0 14px;border:2px solid var(--line);border-top-color:currentColor;border-radius:50%;animation:progress-spin .8s linear infinite}
-@keyframes progress-spin{to{transform:rotate(360deg)}}
-@media(prefers-reduced-motion:reduce){#status.plannerprogress.loading::before{animation:none}}
+#status.plannerprogress.loading{animation:none}
 
 /* Phone layouts: names first, quantities second, actions last. */
 @media(max-width:800px){
@@ -480,3 +477,13 @@ dialog,#suggestionsDialog{position:fixed;inset:0;margin:auto;max-height:calc(100
 .targetbar .targetrow>.iconbutton{align-self:center}
 
 .external-supply-label{cursor:help;text-decoration:underline dotted var(--muted);text-underline-offset:3px}
+
+/* Small, non-interactive activity notice; also visible over the expanded map. */
+.planner-activity{position:fixed;top:calc(12px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);z-index:120;width:min(360px,calc(100vw - 24px));display:grid;grid-template-columns:22px minmax(0,1fr) auto;align-items:center;gap:10px;padding:12px 15px 14px;border:1px solid #aac4b4;border-radius:12px;background:#f6fbf7;color:#193c2b;box-shadow:0 5px 22px #0003;pointer-events:none;overflow:hidden}
+.activity-copy{display:flex;flex-direction:column;gap:3px;min-width:0}.activity-copy strong{font-size:13px;line-height:1.35;font-weight:650}.activity-copy small{font-size:11px;line-height:1.35;color:var(--muted)}
+.activity-mark{font-size:21px;line-height:1;text-align:center;color:var(--green)}.activity-time{font-size:11px;font-variant-numeric:tabular-nums;color:var(--muted)}
+.activity-track{position:absolute;bottom:0;left:0;right:0;height:2px;background:#5c987b20}.activity-track::after{content:"";display:block;width:35%;height:100%;background:var(--green);animation:activity-slide 2.8s ease-in-out infinite}
+.planner-activity[data-state=done] .activity-track,.planner-activity[data-state=error] .activity-track{display:none}.planner-activity[data-state=error]{border-color:#bb925b}.planner-activity[data-state=error] .activity-mark{color:#bd873f}
+[data-theme=dark] .planner-activity{background:#20372b;border-color:#54795f;color:#e4f0e6;box-shadow:0 5px 22px #0006}
+@keyframes activity-slide{from{transform:translateX(-110%)}to{transform:translateX(390%)}}
+@media(prefers-reduced-motion:reduce){.activity-track::after{animation:none;width:100%;opacity:.55}}
