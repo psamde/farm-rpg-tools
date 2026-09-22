@@ -52,9 +52,9 @@ console.log('Exploration menu order checks passed');
 
 assert.equal(limited.continuous,false);
 assert.equal(limited.minimumContinuousSlots,2);
-assert.equal(limited.minimumStopSlots,2);
+assert.equal(limited.minimumStopSlots,1); // The already-loaded intermediate needs no additional setup.
 for(const stop of limited.craftStops)assert.ok(stop.sets.every(set=>set.length<=1));
-for(const id of ['b','c'])assert.ok(Math.abs((limited.activeWork[id]||0)+limited.craftStops.reduce((n,s)=>n+(s.amounts[id]||0)*(s.id==='start'?1:limited.rounds),0)-1000)<1e-6);
+for(const id of ['b','c'])assert.ok(Math.abs((limited.activeWork[id]||0)+limited.craftStops.reduce((n,s)=>n+(s.amounts[id]||0)*(s.once?1:limited.rounds),0)-1000)<1e-6);
 const allActive=inventoryRoute(chain,chainItems,loc,{inventory_size:400,craftworks_slots:2});assert.equal(allActive.continuous,true);
 console.log('Location checkpoint and slot threshold checks passed');
 const stretchItems={};for(const id of ['a','b','c']){stretchItems[id]={name:id,direct_ingredients:{},output_quantity:1};stretchItems[id+'craft']={name:id+'craft',direct_ingredients:{[id]:1},output_quantity:1};}
@@ -104,7 +104,7 @@ const supplied=inventoryRoute(suppliedPlan,suppliedItems,loc,{inventory_size:400
 assert.equal(supplied.complete,true);
 assert.ok(Object.values(supplied.inventoryPeaks).every(n=>n<=400+1e-7));
 assert.ok(supplied.rounds>1);assert.ok(!supplied.inventoryPeaks.potato);
-assert.equal((supplied.activeWork.b||0)+supplied.craftStops.reduce((n,s)=>n+(s.amounts.b||0)*(s.id==='start'?1:supplied.rounds),0),1000);
+assert.equal((supplied.activeWork.b||0)+supplied.craftStops.reduce((n,s)=>n+(s.amounts.b||0)*(s.once?1:supplied.rounds),0),1000);
 // The exemption removes the capacity limit, not the supplied quantity limit.
 const insufficient=inventoryRoute({...suppliedPlan,item_balances:[{item_id:'potato',starting_inventory:4000,auto_starting_inventory:4000}]},suppliedItems,loc,{inventory_size:400});
 assert.equal(insufficient.complete,false);

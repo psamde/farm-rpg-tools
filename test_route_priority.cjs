@@ -57,7 +57,7 @@ middle.areas.push({location_id:'last',name:'Unrelated location',explores:200,ite
 const midItems={...items,salt:item('Salt'),saltcraft:item('Required salt craft',{salt:1})};
 const mid=inventoryRoute(middle,midItems,[...locations,{id:'last',base_drop_rate:1}],{inventory_size:2000,craftworks_slots:10,_rounds:1,_groupSpan:1});
 assert.equal(mid.complete,true,mid.problem);
-assert.ok(mid.craftStops.find(s=>s.id==='late').sets.some(ids=>ids.includes('needle')));
+assert.ok(mid.activeGroups.some(g=>g.start===1&&g.recipes.includes('needle'))||mid.craftStops.find(s=>s.id==='late')?.sets.some(ids=>ids.includes('needle')));
 assert.ok(!mid.craftStops.find(s=>s.id==='last')?.sets.some(ids=>ids.includes('needle')));
 // An exploration-only goal is also protected from optional consumption.
 const rawGoal={assumptions:plan.assumptions,crafts_in_dependency_order:[],secondary:{crafts_in_dependency_order:rows({spear:100})},

@@ -29,6 +29,7 @@ jobs:
           python -m unittest test_planner test_secondary test_balanced test_external test_passive test_primary_cache
           node test_route.cjs
           node test_route_priority.cjs
+          node test_route_consolidation.cjs
           node test_route_large.cjs
           node test_save.cjs
           node test_suggestions.cjs

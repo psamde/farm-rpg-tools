@@ -346,13 +346,17 @@ function renderRoute(){if(!result||$('resultContent').classList.contains('stale'
 
 
 function craftworksSetup(plan,loop){
- const checkpoint=stop=>`<details id="craft-stop-${stop.id}" class="craftworksset"><summary>${esc(stop.name)} · ${stop.sets.length} ${stop.sets.length===1?'setup':'setups'}</summary><p class="hint">Run these setups in order. Finish the required crafts before switching to optional leftovers; keep the outputs needed by later steps.</p>${stop.sets.map((ids,i)=>`<h4>Setup ${i+1} · ${stop.setPhases[i]==='required'?'Required crafts':'Optional leftovers'} · ${ids.length} / ${loop.slots} slots</h4><div class="craftworkstable"><table><thead><tr><th>Recipe</th><th>${stop.id==='start'?'Before starting':'Additional crafts per loop'} ≈</th></tr></thead><tbody>${[...ids].reverse().map(id=>`<tr><td>${itemName(id,items[id]?.name||id)}</td><td>${stop.setAmounts[i][id]<1?'&lt;1':fmt(stop.setAmounts[i][id])}</td></tr>`).join('')}</tbody></table></div>`).join('')}</details>`;
- const start=loop.craftStops.find(s=>s.id==='start');
+ const timing=stop=>{
+  if(stop.once||stop.runCount===loop.rounds)return '';
+  return stop.runCount===stop.lastRound-stop.firstRound+1?` Needed on ${stop.runCount===1?'loop '+fmt(stop.firstRound):'loops '+fmt(stop.firstRound)+'–'+fmt(stop.lastRound)}.`:` Needed on ${fmt(stop.runCount)} of ${fmt(loop.rounds)} loops, when ingredients are available.`;
+ };
+ const checkpoint=stop=>`<details id="craft-stop-${stop.id}" class="craftworksset"><summary>${esc(stop.name)} · ${stop.sets.length} ${stop.sets.length===1?'setup':'setups'}</summary><p class="hint">Run these setups in order. Finish required crafts before optional leftovers; keep outputs needed later.${timing(stop)}</p>${stop.sets.map((ids,i)=>`<h4>Setup ${i+1} · ${stop.setPhases[i]==='required'?'Required crafts':'Optional leftovers'} · ${ids.length} / ${loop.slots} slots</h4><div class="craftworkstable"><table><thead><tr><th>Recipe</th><th>${stop.id==='start'?'Before starting':stop.id==='finish'?'Final crafts':'Additional crafts per loop'} ≈</th></tr></thead><tbody>${[...ids].reverse().map(id=>`<tr><td>${itemName(id,items[id]?.name||id)}</td><td>${stop.setAmounts[i][id]<1?'&lt;1':fmt(stop.setAmounts[i][id])}</td></tr>`).join('')}</tbody></table></div>`).join('')}</details>`;
+ const start=loop.craftStops.find(s=>s.id==='start'),finish=loop.craftStops.find(s=>s.id==='finish');
  const sections=(start?checkpoint(start):'')+(loop.activeGroups||[]).map((group,i)=>{
  const after=loop.craftStops.find(s=>s.id===loop.parts[group.end].id);
  return `<details id="craft-stop-group-${i}" class="craftworksset"><summary>Keep active: ${esc(group.from)}${group.from===group.to?'':' → '+esc(group.to)} · ${group.recipes.length} / ${loop.slots} slots</summary><p class="hint">Required recipes come first. Within each group, finished items sit above their ingredients.</p>${craftworksDisplayOrder(group.recipes,loop.requiredRecipes).map(id=>`<div class="implicitrow">${itemName(id,items[id]?.name||id)}</div>`).join('')||'<p class="hint">No active crafting needed.</p>'}</details>`+(after?checkpoint(after):'');
- }).join('');
- return `<div class="sectiontitle"><h3>Craftworks by location</h3></div><p class="hint">Follow these setups in route order.${loop.priorityStages?' Optional recipes that share ingredients with required crafts wait for a later setup, even when there are spare slots.':''}</p>${sections||'<p class="hint">No crafting needed.</p>'}<p class="hint">Amounts are averages per loop. Skip completed recipes. Stop optional crafts at the listed amounts and keep finished items needed for your goals. This schedule estimates inventory use; Craftworks tick and swap times are not modeled.</p>`;
+ }).join('')+(finish?checkpoint(finish):'');
+ return `<div class="sectiontitle"><h3>Craftworks by location</h3></div><p class="hint">Follow these setups in route order. Setups stay active as long as possible; extra swaps appear where needed for slots or ingredient priority.</p>${sections||'<p class="hint">No crafting needed.</p>'}<p class="hint">Recurring amounts are averages per loop; final crafts are shown separately. Skip completed recipes. Stop optional crafts at the listed amounts and keep items needed for your goals. Craftworks tick and swap times are not modeled.</p>`;
 }
 
 
