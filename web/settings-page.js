@@ -10,8 +10,10 @@
  const valid=()=>[...form.querySelectorAll('input,select')].every(el=>el.checkValidity());
  function changedDraft(message){
   const changed=!!dirty()||!valid();
-  $('applyGlobalSettings').disabled=!changed||!valid();$('discardGlobalSettings').disabled=!changed;
-  status.textContent=message||(changed?'Unsaved changes. Save settings to use them in your plans.':'Settings saved in this browser.');
+  const complete=GlobalSettings.setupComplete();
+  document.querySelector('.settings-nav small').hidden=complete;
+  $('applyGlobalSettings').disabled=(!changed&&complete)||!valid();$('discardGlobalSettings').disabled=!changed;
+  status.textContent=message||(changed?'Unsaved changes. Save settings to use them in your plans.':complete?'Settings saved in this browser.':'Check your settings, then save when ready.');
   document.querySelector('.settings-nav').classList.toggle('has-changes',changed);
  }
  function renderZones(){if(!draft)return;ciderSettings(draft);$('areaCount').textContent=`${draft.areas.length} enabled`;}
@@ -56,7 +58,7 @@
  $('allAreas').onclick=()=>{if(draft){draft.areas=catalog.locations.map(a=>a.id);renderZones();changedDraft();}};
  $('noAreas').onclick=()=>{if(draft){draft.areas=[];renderZones();changedDraft();}};
  $('applyGlobalSettings').onclick=()=>act(()=>{
-  const next=current();applyAccountSettings(next);draft=GlobalSettings.pick(state);render();
+  const next=current();applyAccountSettings(next);GlobalSettings.completeSetup();draft=GlobalSettings.pick(state);render();
   status.textContent='Settings saved. Your plan updates when you return to the planner.';$('settingsProfileStatus').textContent='';$('settingsCodeStatus').textContent='';
  });
  $('discardGlobalSettings').onclick=()=>{reset();status.textContent='Unsaved changes discarded.';};
@@ -119,6 +121,7 @@
  };
  window.addEventListener('app-page-changed',()=>{if(draft)changedDraft();});
  window.addEventListener('storage',e=>{
+  if(e.key===GlobalSettings.setupKey&&draft)changedDraft();
   if(e.key===GlobalSettings.profilesKey)act(()=>profiles(),profileStatus);
   if(e.key===GlobalSettings.key&&state)act(()=>{
    const pending=dirty(),previous=draft;

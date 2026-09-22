@@ -394,6 +394,7 @@ function restorePlanCode(code){
   if(legacy)GlobalSettings.write(restored,catalog.locations);
   localStorage.setItem('farm-workshop-v1',JSON.stringify(GlobalSettings.planOnly(restored)));
  }catch(e){if(legacy){if(previous===null)localStorage.removeItem(GlobalSettings.key);else localStorage.setItem(GlobalSettings.key,previous);}throw e;}
+ if(legacy&&Object.keys(GlobalSettings.pick(parsePlanCode(code).settings)).length)GlobalSettings.completeSetup();
  return restored;
 }
 function applyAccountSettings(value){

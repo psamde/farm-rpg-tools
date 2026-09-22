@@ -1,7 +1,9 @@
 /* Account settings are independent of any tool's saved plan. */
 (function(root){
  'use strict';
- const key='farm-rpg-settings-v1',profilesKey='farm-rpg-settings-profiles-v1';
+ const key='farm-rpg-settings-v1',profilesKey='farm-rpg-settings-profiles-v1',setupKey='farm-rpg-settings-setup-complete';
+ const setupComplete=()=>root.localStorage.getItem(setupKey)==='1';
+ const completeSetup=()=>root.localStorage.setItem(setupKey,'1');
  const defaults={theme:'dark',tower_level:0,craftworks_slots:10,inventory_size:10000,resource_saver:0,wanderer:0,lemon_squeezer:false,cinnamon:false,cider_rolls:{},effectiveness_upgrades:{},sprint_shoes:0,iron_depot:true,runecube:false,cockatrice_ether_source:false,areas:null};
  const clone=value=>JSON.parse(JSON.stringify(value));
  const object=value=>value!==null&&typeof value==='object'&&!Array.isArray(value);
@@ -35,8 +37,12 @@
  function initialize(legacy,locations){
   // Import the old combined autosave once. An old plan left open in another tab
   // must never overwrite a newer account profile on startup.
-  if(root.localStorage.getItem(key))return read(locations);
-  return write(pick(legacy),locations);
+  const existing=root.localStorage.getItem(key),inherited=pick(legacy);
+  const settings=existing?read(locations):write(inherited,locations);
+  // Existing account settings predate this hint's completion flag. Fresh installs
+  // retain an explicit false flag until Save, even after refreshing the page.
+  if(root.localStorage.getItem(setupKey)===null)root.localStorage.setItem(setupKey,existing||Object.keys(inherited).length?'1':'0');
+  return settings;
  }
  function encode(value){return 'FWS1.'+btoa(Array.from(new TextEncoder().encode(JSON.stringify({version:1,settings:validate(value)})),b=>String.fromCharCode(b)).join(''));}
  function decode(code,locations){
@@ -54,5 +60,5 @@
   return data.profiles;
  }
  function writeProfiles(profiles){root.localStorage.setItem(profilesKey,JSON.stringify({version:1,profiles}));}
- root.GlobalSettings={key,profilesKey,defaults,keys:Object.keys(defaults),pick,planOnly,validate,read,write,initialize,encode,decode,readProfiles,writeProfiles};
+ root.GlobalSettings={key,profilesKey,setupKey,setupComplete,completeSetup,defaults,keys:Object.keys(defaults),pick,planOnly,validate,read,write,initialize,encode,decode,readProfiles,writeProfiles};
 })(globalThis);
