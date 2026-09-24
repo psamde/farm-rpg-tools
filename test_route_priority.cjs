@@ -36,9 +36,9 @@ for(const slots of [1,2,10])for(const rounds of [1,2,5]){
  const slow=inventoryRoute(plan,items,locations,{...settings,_trace:undefined,_singleClick:true});
  assert.equal(slow.complete,true);assert.deepEqual(slow.craftStops,r.craftStops);assert.deepEqual(slow.deliveredTargets,r.deliveredTargets);
 }
-// Non-competing leftovers can stay active; finished items still precede inputs.
+// Non-competing leftovers remain fully craftable; finished items precede inputs.
 const r=inventoryRoute(plan,items,locations,{inventory_size:2000,craftworks_slots:10,_rounds:1});
-assert.ok(r.activeGroups.some(g=>g.recipes.includes('dye')));
+assert.equal((r.activeWork.dye||0)+r.craftStops.reduce((n,s)=>n+(s.amounts.dye||0)*(s.once?1:r.rounds),0),200);
 assert.deepEqual(craftworksDisplayOrder(['awl','button','doll','dye'],['awl','button','doll']),['doll','button','awl','dye']);
 // Inventory-only plans still run the required phase before the optional phase.
 const stocked=structuredClone(plan);stocked.areas=[];
@@ -51,14 +51,15 @@ const saved={...plan,assumptions:{...plan.assumptions,resource_saver:45}};
 const saving=inventoryRoute(saved,items,locations,{inventory_size:2000,craftworks_slots:2,_rounds:7});
 assert.equal(saving.complete,true,saving.problem);assert.equal(saving.deliveredTargets.awl,20);
 console.log('Required-first stages, shared intermediates, late supplies, reserved goals, spare slots, independent crafts and rounding passed');
-// A later, unrelated primary goal must not delay already released leftovers.
+// Already released leftovers may wait for a later shared setup; unrelated
+// primary goals must never prevent their full quantity from being crafted.
 const middle=structuredClone(plan);middle.crafts_in_dependency_order.push({item_id:'saltcraft',crafts:200});
 middle.areas.push({location_id:'last',name:'Unrelated location',explores:200,items:[{item_id:'salt',expected_drops:200}]});
 const midItems={...items,salt:item('Salt'),saltcraft:item('Required salt craft',{salt:1})};
 const mid=inventoryRoute(middle,midItems,[...locations,{id:'last',base_drop_rate:1}],{inventory_size:2000,craftworks_slots:10,_rounds:1,_groupSpan:1});
 assert.equal(mid.complete,true,mid.problem);
-assert.ok(mid.activeGroups.some(g=>g.start===1&&g.recipes.includes('needle'))||mid.craftStops.find(s=>s.id==='late')?.sets.some(ids=>ids.includes('needle')));
-assert.ok(!mid.craftStops.find(s=>s.id==='last')?.sets.some(ids=>ids.includes('needle')));
+assert.equal((mid.activeWork.needle||0)+mid.craftStops.reduce((n,s)=>n+(s.amounts.needle||0)*(s.once?1:mid.rounds),0),100);
+assert.ok(!mid.craftStops.find(s=>s.id==='early')?.recipes.includes('needle'));
 // An exploration-only goal is also protected from optional consumption.
 const rawGoal={assumptions:plan.assumptions,crafts_in_dependency_order:[],secondary:{crafts_in_dependency_order:rows({spear:100})},
  item_balances:[{item_id:'wood',starting_inventory:0,reserved_target_output:500}],

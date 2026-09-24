@@ -30,6 +30,7 @@ jobs:
           node test_route.cjs
           node test_route_priority.cjs
           node test_route_consolidation.cjs
+          node test_route_capacity.cjs
           node test_route_large.cjs
           node test_save.cjs
           node test_suggestions.cjs

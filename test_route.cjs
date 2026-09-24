@@ -61,23 +61,25 @@ const stretchItems={};for(const id of ['a','b','c']){stretchItems[id]={name:id,d
 const stretchPlan={assumptions:plan.assumptions,item_balances:[],crafts_in_dependency_order:['a','b','c'].map(id=>({item_id:id+'craft',crafts:400})),areas:['a','a','b','b','c','c'].map((id,i)=>({location_id:'zone'+i,name:'Zone '+i,explores:200,items:[{item_id:id,expected_drops:200}]}))};
 const stretchLocations=stretchPlan.areas.map(a=>({id:a.location_id,base_drop_rate:1}));
 const narrow=inventoryRoute(stretchPlan,stretchItems,stretchLocations,{inventory_size:1000,craftworks_slots:1});
-assert.equal(narrow.complete,true);assert.deepEqual(narrow.activeGroups.map(g=>[g.start,g.end]),[[0,1],[2,3],[4,5]]);
+assert.equal(narrow.complete,true);assert.deepEqual(narrow.activeGroups.map(g=>[g.start,g.end]),[[0,5]]);
 assert.ok(narrow.activeGroups.every(g=>g.recipes.length<=1));
-assert.deepEqual(narrow.craftStops,[]); // All work already completes in the active setups.
-assert.deepEqual(narrow.activeWork,{acraft:400,bcraft:400,ccraft:400});
+assert.ok(narrow.activeGroups.every(g=>g.recipes.length===0));
+assert.deepEqual(narrow.craftStops.map(s=>s.id),['zone5']); // The small raw piles fit until the end.
+assert.equal(narrow.craftStops[0].sets.length,3);
+for(const id of ['a','b','c'])assert.equal(narrow.craftStops[0].amounts[id+'craft']*narrow.rounds,400);
 const wide=inventoryRoute(stretchPlan,stretchItems,stretchLocations,{inventory_size:1000,craftworks_slots:2});
-assert.equal(wide.complete,true);assert.deepEqual(wide.activeGroups.map(g=>[g.start,g.end]),[[0,3],[4,5]]);
-assert.ok(wide.activeGroups.length<narrow.activeGroups.length);
-console.log('Consecutive Craftworks stretches: 2 locations per setup, extending to 4 with more slots');
+assert.equal(wide.complete,true);assert.deepEqual(wide.activeGroups.map(g=>[g.start,g.end]),[[0,5]]);
+assert.equal(wide.craftStops[0].sets.length,2);
+console.log('Small piles wait until the end; extra slots reduce final setup loads');
 // A shared ingredient must not pull an unavailable gemstone recipe into a setup.
 const selectiveItems={wood:{name:'Wood',direct_ingredients:{}},gem:{name:'Unpolished Ruby',direct_ingredients:{}},board:{name:'Board',direct_ingredients:{wood:1}},ruby:{name:'Ruby',direct_ingredients:{wood:1,gem:1}}};
 const selectivePlan={assumptions:plan.assumptions,item_balances:[],crafts_in_dependency_order:[{item_id:'board',crafts:200},{item_id:'ruby',crafts:200}],areas:[{location_id:'forest',name:'Forest',explores:200,items:[{item_id:'wood',expected_drops:200}]},{location_id:'spring',name:'Small Spring',explores:200,items:[{item_id:'wood',expected_drops:200}]},{location_id:'cave',name:'Cave',explores:200,items:[{item_id:'gem',expected_drops:200}]}]};
 const selective=inventoryRoute(selectivePlan,selectiveItems,selectivePlan.areas.map(a=>({id:a.location_id,base_drop_rate:1})),{inventory_size:1000,craftworks_slots:1});
 assert.equal(selective.complete,true);
-assert.deepEqual(selective.activeGroups[0].recipes,['board']);
-assert.equal(selective.activeGroups[0].end,1);
-assert.deepEqual(selective.activeGroups[1].recipes,['ruby']);
-console.log('Unavailable Ruby excluded; Forest and Small Spring share the useful setup');
+assert.ok(selective.activeGroups.every(g=>g.recipes.length===0));
+assert.deepEqual(selective.craftStops.map(s=>s.id),['cave']);
+assert.deepEqual(selective.craftStops[0].recipes,['board','ruby']);
+console.log('Wood and gems wait safely; Ruby appears only after the gem location');
 
 // Every expected inventory increase is audited, not just drops or final balances.
 for(const capacity of [200,400,1000])for(const slots of [1,2]){

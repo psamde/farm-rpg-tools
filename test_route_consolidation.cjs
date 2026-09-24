@@ -16,7 +16,7 @@ function checkTotals(p,r,capacity){
 }
 
 // A saved fractional gem from an earlier loop makes Final payable at Early.
-// The first-loop forecast misses this; the complete trace must merge that swap.
+// The first-loop forecast misses this; delaying it removes the unnecessary swap.
 const carryItems={wood:item(),paper:item(),gem:item(),coal:item(),board:item({wood:1}),final:item({board:1,gem:1}),paperCraft:item({paper:1}),coalCraft:item({coal:1})};
 const carry={assumptions:{...assumptions,resource_saver:45},crafts_in_dependency_order:rows({board:10,final:10,paperCraft:10,coalCraft:10}),item_balances:[],areas:[area('early',{wood:10,paper:10}),area('late',{gem:11.3,coal:10})]};
 const carrySettings={inventory_size:100,craftworks_slots:3,_rounds:3};
@@ -25,7 +25,8 @@ assert.deepEqual(baseline.craftStops.map(s=>s.id),['early']);
 assert.equal(baseline.craftStops[0].firstRound,2);assert.equal(baseline.craftStops[0].runCount,1);
 const merged=inventoryRoute(carry,carryItems,locations(carry),carrySettings);
 checkTotals(carry,merged,100);assert.equal(merged.uses,baseline.uses);assert.equal(merged.rounds,baseline.rounds);
-assert.equal(merged.craftStops.length,0);assert.ok(merged.activeGroups[0].recipes.includes('final'));
+assert.ok(!merged.craftStops.some(s=>s.id==='early'));
+assert.ok(!merged.activeGroups[0].recipes.includes('final'));
 assert.deepEqual(merged.parts.map(p=>p.batch),baseline.parts.map(p=>p.batch));
 const single=inventoryRoute(carry,carryItems,locations(carry),{...carrySettings,_singleClick:true});
 assert.deepEqual(single.activeGroups,merged.activeGroups);assert.deepEqual(single.craftStops,merged.craftStops);
@@ -37,9 +38,9 @@ const safeItems={leaf:item(),cotton:item(),dye:item({leaf:1}),chair:item({dye:1,
 const safe={assumptions,crafts_in_dependency_order:rows({dye:200,chair:200}),secondary:{crafts_in_dependency_order:rows({parchment:200})},item_balances:[],areas:[area('early',{leaf:600}),area('late',{cotton:200})]};
 const safeSettings={inventory_size:1000,craftworks_slots:3,_rounds:2,_groupSpan:1};
 const safeResult=inventoryRoute(safe,safeItems,locations(safe),safeSettings);
-checkTotals(safe,safeResult,1000);assert.equal(safeResult.craftStops.length,0);
+checkTotals(safe,safeResult,1000);assert.ok(safeResult.craftStops.every(s=>s.id==='late'||s.once));
 assert.ok(!safeResult.activeGroups[0].recipes.includes('parchment'));
-assert.ok(safeResult.activeGroups.find(g=>g.start===1).recipes.includes('parchment'));
+assert.ok(safeResult.craftStops.some(s=>s.recipes.includes('parchment')));
 
 // Spear cannot stay active across Early -> Middle: it could spend the wood
 // before required chairs get cloth. Move its checkpoint batch to the existing
@@ -51,8 +52,7 @@ const original=inventoryRoute(defer,deferItems,locations(defer),{...deferSetting
 assert.deepEqual(original.craftStops.map(s=>s.id),['middle','late']);
 const events=[],deferred=inventoryRoute(defer,deferItems,locations(defer),{...deferSettings,_trace:e=>events.push(e)});
 checkTotals(defer,deferred,1000);assert.equal(deferred.deliveredTargets.chair,100);assert.equal(deferred.uses,original.uses);
-assert.ok(!deferred.activeGroups[0].recipes.includes('spear'));assert.equal(deferred.craftStops.length,0);
-assert.deepEqual(deferred.deferredStops.middle,['spear']);
+assert.ok(!deferred.activeGroups[0].recipes.includes('spear'));assert.ok(!deferred.craftStops.some(s=>s.id==='middle'));
 assert.ok(events.filter(e=>e.id==='spear').every(e=>e.place==='late'));
 assert.equal(events.filter(e=>e.id==='spear').reduce((n,e)=>n+e.count,0),100);
 

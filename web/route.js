@@ -39,7 +39,7 @@ function simulateInventoryRoute(plan, items, locations, settings){
  const slots=Number(settings.craftworks_slots??10);
  if(!Number.isInteger(slots)||slots<1||slots>100)throw Error('Craftworks slots must be a whole number from 1 to 100.');
  const priorityStages=contestedOptional.size>0;
- const continuous=slots>=order.length&&!priorityStages, stopWork=new Map(),stopPhases=new Map(),stopRounds=new Map(),activeWork={},unsafeMerges=new Map();
+ const continuous=slots>=order.length&&!priorityStages, stopWork=new Map(),stopPhases=new Map(),stopRounds=new Map(),activeWork={},groupWork={},unsafeMerges=new Map();
  let recording=null,currentPlace='start',currentIndex=-1,currentGroup=null;
  const setups=[];for(let i=0;i<order.length;i+=slots)setups.push(order.slice(i,i+slots));
  const menuRank=id=>{const i=explorationMenuOrder.indexOf(id);return i<0?explorationMenuOrder.length:i;};
@@ -119,7 +119,7 @@ function simulateInventoryRoute(plan, items, locations, settings){
  const visitRecipes=parts.map((_,i)=>activeGroups.find(g=>i>=g.start&&i<=g.end).recipes);
  const stopPlaces=new Set(activeGroups.map(g=>g.end));
  for(const p of parts)p.dropRates=Object.fromEntries(p.drops.map(d=>[d.id,d.q]));
- const visits=[],empties=[];let uses=0,crafts=0,round=1,problem=null,verificationSteps=0;
+ const visits=[],empties=[];let uses=0,crafts=0,round=1,problem=null,failure=null,verificationSteps=0;
  const requiredAllowance={},optionalAllowance={},delivered={},needed={},future={};
  let requiredHoldsCache=null,checkpointPlace=-1;
  const targetHeld=id=>Math.max(0,(targetReserves[id]||0)*Math.min(round,rounds)/rounds-(delivered[id]||0));
@@ -184,7 +184,7 @@ function simulateInventoryRoute(plan, items, locations, settings){
     const work=stopWork.get(recording);work[id]=(work[id]||0)+count;
     if(!stopPhases.has(recording))stopPhases.set(recording,{required:{},optional:{}});
     const phase=stopPhases.get(recording)[kind];phase[id]=(phase[id]||0)+count;
-   }else activeWork[id]=(activeWork[id]||0)+count;
+   }else{activeWork[id]=(activeWork[id]||0)+count;if(currentGroup){const work=groupWork[currentGroup.start]||(groupWork[currentGroup.start]={});work[id]=(work[id]||0)+count;}}
   }
   // Simulate ingredient production in dependency order, completing all payable
   // required crafts before the optional pass. Display order is reversed within
@@ -195,7 +195,7 @@ function simulateInventoryRoute(plan, items, locations, settings){
  function atStop(key){
   // Finishing the already loaded recipes is not a Craftworks swap.
   if(currentGroup)craft(currentGroup.recipes);
-  recording=key;checkpointPlace=key==='finish'?parts.length-1:parts.findIndex(p=>p.id===key);craft(order.filter(id=>!settings._deferredStops?.[key]?.includes(id)),true);recording=null;
+  recording=key;checkpointPlace=key==='finish'?parts.length-1:parts.findIndex(p=>p.id===key);craft(order.filter(id=>(!settings._checkpointRecipes||settings._checkpointRecipes[key]?.includes(id))&&!settings._deferredStops?.[key]?.includes(id)),true);recording=null;
  }
  function deliverTargets(){
   requiredHoldsCache=null;
@@ -235,7 +235,7 @@ function simulateInventoryRoute(plan, items, locations, settings){
    for(let j=0;j<p.batch&&!problem;){
     let clicks=(p.batch-j)/drinksPerClick;
     for(const d of p.drops)if(d.q>0)clicks=Math.min(clicks,Math.floor((capacity-(stock[d.id]||0)+1e-7)/(d.q*drinksPerClick)));
-    if(clicks<1){const blockers=p.drops.filter(d=>(stock[d.id]||0)+d.q*drinksPerClick>capacity+1e-7).map(d=>items[d.id]?.name||d.id);problem=`The loop needs more room for ${blockers.slice(0,4).join(', ')}. Its full inventory sequence could not be verified.`;break;}
+    if(clicks<1){const blocked=p.drops.filter(d=>(stock[d.id]||0)+d.q*drinksPerClick>capacity+1e-7);failure={kind:'capacity',round,place:placeIndex,items:blocked.map(d=>d.id),stock:{...stock},incoming:{...incoming},remaining:{...remaining}};const blockers=blocked.map(d=>items[d.id]?.name||d.id);problem=`The loop needs more room for ${blockers.slice(0,4).join(', ')}. Its full inventory sequence could not be verified.`;break;}
     // Until the next payable craft, drops only increase stock. Checking the
     // endpoint proves every intervening click fits, including five-drink food.
     clicks=settings._singleClick?1:Math.min(clicks,nextCraftClick(p,visitRecipes[placeIndex]));
@@ -245,6 +245,7 @@ function simulateInventoryRoute(plan, items, locations, settings){
     p.left-=drinks;uses+=drinks;j+=drinks;v.drinks+=drinks;v.explores+=p.perDrink*drinks;craft(visitRecipes[placeIndex]);
    }
    if(!continuous&&stopPlaces.has(placeIndex))atStop(p.id);
+   if(settings._traceInventory)settings._traceInventory({round,place:p.id,stock:{...stock},incoming:{...incoming},remaining:{...remaining}});
   }
   clearFinished();atStop(parts.at(-1)?.id||'start');
  }
@@ -274,79 +275,101 @@ function simulateInventoryRoute(plan, items, locations, settings){
   }
   return {id,name:id==='start'?'Before the first location':id==='finish'?'After the final loop':`After ${parts.find(p=>p.id===id)?.name||'the final location'}`,once,firstRound:atRounds[0],lastRound:atRounds.at(-1),runCount:atRounds.length,recipes,sets,setPhases,setAmounts,amounts:Object.fromEntries(recipes.map(ref=>[ref,work[ref]/(once?1:rounds)]))};
  });
- return {deferredStops:settings._deferredStops||{},unsafeMerges:[...unsafeMerges.values()],priorityStages,releasePlace,requiredRecipes:[...requiredIds],contestedOptional:[...contestedOptional],deliveredTargets:delivered,capacity,inventoryPeaks,verificationSteps,inventoryVerified:!problem,method,drinksPerClick,activeWork,stamina:parts.reduce((n,p)=>n+p.scheduled*p.staminaPerDrink,0),rounds,slots,setups,continuous,interval,activeGroups:activeGroups.map(g=>({...g,from:parts[g.start].name,to:parts[g.end].name,after:g.start?parts[g.start-1].id:null})),craftStops,minimumContinuousSlots:order.length,minimumStopSlots:Math.max(0,...craftStops.map(s=>s.recipes.length)),crafting:order.map(id=>({id,perLoop:totals[id]/rounds,total:totals[id]})),extraExplores:parts.reduce((n,p)=>n+p.scheduled*p.perDrink-p.explores,0),parts:parts.map(p=>({...p,visits:visits.filter(v=>v.id===p.id).length,maxRun:visits.reduce((n,v)=>v.id===p.id?Math.max(n,v.drinks):n,0)})),visits,empties,problem,uses,complete:!problem};
+ return {failure,deferredStops:settings._deferredStops||{},unsafeMerges:[...unsafeMerges.values()],priorityStages,releasePlace,requiredRecipes:[...requiredIds],contestedOptional:[...contestedOptional],deliveredTargets:delivered,capacity,inventoryPeaks,verificationSteps,inventoryVerified:!problem,method,drinksPerClick,activeWork,stamina:parts.reduce((n,p)=>n+p.scheduled*p.staminaPerDrink,0),rounds,slots,setups,continuous,interval,activeGroups:activeGroups.map(g=>({...g,amounts:Object.fromEntries(Object.entries(groupWork[g.start]||{}).map(([id,q])=>[id,q/rounds])),from:parts[g.start].name,to:parts[g.end].name,after:g.start?parts[g.start-1].id:null})),craftStops,minimumContinuousSlots:order.length,minimumStopSlots:Math.max(0,...craftStops.map(s=>s.recipes.length)),crafting:order.map(id=>({id,perLoop:totals[id]/rounds,total:totals[id]})),extraExplores:parts.reduce((n,p)=>n+p.scheduled*p.perDrink-p.explores,0),parts:parts.map(p=>({...p,visits:visits.filter(v=>v.id===p.id).length,maxRun:visits.reduce((n,v)=>v.id===p.id?Math.max(n,v.drinks):n,0)})),visits,empties,problem,uses,complete:!problem};
 }
-// Minimize avoidable setup loads after the inventory-safe batches are chosen.
-// Full replays include the first loop, carried stock, rounding and final cleanup.
-function inventoryRoute(plan,items,locations,settings){
- const replaySettings={...settings,_trace:undefined};
- let best=simulateInventoryRoute(plan,items,locations,replaySettings);
- if(best.complete&&!settings._noConsolidation&&best.parts.length){
-  const fixed={...replaySettings,_rounds:best.rounds};
-  const schedule=r=>r.activeGroups.map(g=>({start:g.start,end:g.end,recipes:[...g.recipes],optionalActive:[...(g.optionalActive||[])]}));
-  const score=r=>r.activeGroups.filter(g=>g.recipes.length).length+r.craftStops.reduce((n,s)=>n+s.sets.length,0);
-  let attempts=0;const trials=new Map();
-  function replay(groups,deferred=best.deferredStops){
-   const key=JSON.stringify([groups,deferred]);
-   if(trials.has(key))return trials.get(key);
-   if(attempts>=24)return null;
-   attempts++;
-   const candidate=simulateInventoryRoute(plan,items,locations,{...fixed,_activeGroups:groups,_deferredStops:deferred,_groupSpan:1});
-   trials.set(key,candidate);return candidate;
-  }
-  function trial(groups,deferred){const candidate=replay(groups,deferred);return candidate?.complete&&!candidate.unsafeMerges.length?candidate:null;}
-
-  // Fit a checkpoint's actual recipes into its existing stretch. Prefer a full
-  // merge, then remove recipes whose timing requires a separate optional set.
-  for(let pass=0;pass<2;pass++){
-   let improved=false;
-   for(let i=0;i<best.activeGroups.length;i++){
-    const groups=schedule(best),group=groups[i],stop=best.craftStops.find(s=>s.id===best.parts[group.end].id);
-    if(!stop)continue;
-    const optional=new Set(stop.sets.flatMap((ids,j)=>stop.setPhases[j]==='optional'?ids:[]));
-    const candidates=stop.recipes.filter(id=>!group.recipes.includes(id)||optional.has(id)&&!group.optionalActive.includes(id));
-    const required=new Set(best.requiredRecipes);
-    candidates.sort((a,b)=>Number(required.has(b))-Number(required.has(a)));
-    for(const id of candidates){
-     if(!group.recipes.includes(id)&&group.recipes.length>=best.slots)continue;
-     if(!group.recipes.includes(id))group.recipes.push(id);
-     if(optional.has(id)&&!group.optionalActive.includes(id))group.optionalActive.push(id);
-    }
-    if(JSON.stringify(groups)===JSON.stringify(schedule(best)))continue;
-    // Audit reports exact unsafe promotions; retry the other additions together.
-    let candidate=replay(groups);
-    if(candidate?.unsafeMerges.length){
-     for(const bad of candidate.unsafeMerges){const g=groups.find(g=>g.start===bad.start),original=best.activeGroups.find(g=>g.start===bad.start);g.optionalActive=g.optionalActive.filter(id=>id!==bad.id);if(!original.recipes.includes(bad.id))g.recipes=g.recipes.filter(id=>id!==bad.id);}
-     candidate=JSON.stringify(groups)===JSON.stringify(schedule(best))?null:trial(groups);
-    }
-    if(candidate?.complete&&!candidate.unsafeMerges.length&&score(candidate)<score(best)){best=candidate;improved=true;}
-   }
-   // A recipe already loaded later need not create another checkpoint now.
-   // Deferral is useful when adding it to the earlier active set would steal
-   // required inputs. Replaying verifies that carrying the ingredients is safe.
-   for(const stop of [...best.craftStops]){
-    const place=best.parts.findIndex(p=>p.id===stop.id);if(place<0)continue;
-    const later=new Set(best.activeGroups.filter(g=>g.start>place).flatMap(g=>g.recipes));
-    for(const next of best.craftStops)if(best.parts.findIndex(p=>p.id===next.id)>place||next.id==='finish')for(const id of next.recipes)later.add(id);
-    const movable=stop.recipes.filter(id=>later.has(id));if(!movable.length)continue;
-    const deferred={...best.deferredStops,[stop.id]:[...new Set([...(best.deferredStops[stop.id]||[]),...movable])]};
-    const candidate=trial(schedule(best),deferred);
-    if(candidate&&score(candidate)<score(best)){best=candidate;improved=true;}
-   }
-   // Keep one setup across adjacent stretches if their union fits and remains
-   // safe from the earlier location onward, including optional input competition.
-   for(let i=0;i+1<best.activeGroups.length;i++){
-    const groups=schedule(best),a=groups[i],b=groups[i+1],union=[...new Set([...a.recipes,...b.recipes])];
-    if(union.length>best.slots)continue;
-    groups.splice(i,2,{start:a.start,end:b.end,recipes:union,optionalActive:[...new Set([...a.optionalActive,...b.optionalActive])]});
-    const candidate=trial(groups);
-    if(candidate&&score(candidate)<score(best)){best=candidate;improved=true;i--;}
-   }
-   if(!improved||attempts>=24)break;
-  }
+// Choose where crafting is necessary, rather than where it first becomes payable.
+// Every accepted schedule is replayed over all loops with the same craft totals.
+function computeInventoryRoute(plan,items,locations,settings){
+ const quiet={...settings,_trace:undefined,_traceInventory:undefined};
+ let best=simulateInventoryRoute(plan,items,locations,quiet);
+ if(settings._noConsolidation||settings._activeGroups||!best.complete||!best.parts.length){
+  if(settings._trace||settings._traceInventory)return simulateInventoryRoute(plan,items,locations,{...settings,_rounds:best.rounds,_activeGroups:best.activeGroups,_groupSpan:1});
+  return best;
  }
- if(settings._trace)return simulateInventoryRoute(plan,items,locations,{...settings,_rounds:best.rounds,_activeGroups:best.activeGroups,_deferredStops:best.deferredStops,_groupSpan:1});
+ const original=best;
+ const ids=best.crafting.map(c=>c.id),last=best.parts.at(-1).id,end=best.parts.length-1;
+ const finalOnly={[last]:ids,finish:ids};
+ const schedule=r=>r.activeGroups.map(g=>({start:g.start,end:g.end,recipes:[...g.recipes],optionalActive:[...(g.optionalActive||[])]}));
+ // Count location visits, setup loads and the trip to/from Craftworks at an
+ // intermediate location. Recipe entries break ties in favor of less editing.
+ function effort(r){
+  let loads=0,midway=0,entries=0,early=0;
+  for(const [i,g] of r.activeGroups.entries())if(g.recipes.length){loads++;entries+=g.recipes.length;early+=g.recipes.length*(g.end-g.start+1);if(i>0)midway++;}
+  for(const stop of r.craftStops)if(!stop.once){loads+=stop.sets.length;entries+=stop.sets.reduce((n,ids)=>n+ids.length,0);if(stop.id!==last)midway++;}
+  return [r.rounds*(r.parts.length+loads+2*midway),r.rounds*entries,r.uses,early];
+ }
+ const better=(a,b)=>{const x=effort(a),y=effort(b);for(let i=0;i<x.length;i++)if(x[i]!==y[i])return x[i]<y[i];return false;};
+ let calls=0;const tried=new Map();
+ function replay(groups,checkpoints,rounds){
+  const key=JSON.stringify([groups,checkpoints,rounds]);if(tried.has(key))return tried.get(key);
+  if(calls>=80)return null;calls++;
+  const r=simulateInventoryRoute(plan,items,locations,{...quiet,_rounds:rounds,_activeGroups:groups,_checkpointRecipes:checkpoints,_deferredStops:{},_groupSpan:1});
+  tried.set(key,r);return r;
+ }
+ function valid(r){return r?.complete&&!r.unsafeMerges.length;}
+ let chosen={groups:schedule(best),checkpoints:null};
+ function consider(r,groups,checkpoints){if(valid(r)&&better(r,best)){best=r;chosen={groups,checkpoints};}}
+
+ // First try collecting everything and crafting after the final location.
+ // Search whole-drink batches for the largest visits that make this possible.
+ const noActive=[{start:0,end,recipes:[],optionalActive:[]}];
+ let low=1,high=best.rounds,late=replay(noActive,finalOnly,high);
+ if(!valid(late)&&!settings._rounds){
+  // A simpler route can justify more loops, but not more total navigation.
+  const minimumLoads=Math.max(1,Math.ceil(ids.length/best.slots));
+  const limit=Math.max(high,Math.floor(effort(best)[0]/(best.parts.length+minimumLoads)));
+  low=high+1;high=limit;late=replay(noActive,finalOnly,high);
+ }
+ if(valid(late)){
+  let accepted=late;consider(late,noActive,finalOnly);
+  if(!settings._rounds)for(let n=0;n<11&&low<high;n++){
+   const mid=Math.floor((low+high)/2),r=replay(noActive,finalOnly,mid);
+   if(valid(r)){accepted=r;high=mid;consider(r,noActive,finalOnly);}else low=mid+1;
+  }
+  consider(accepted,noActive,finalOnly);
+ }
+
+ // Keep useful active sets from the original verified schedule, but defer ALL
+ // additional checkpoint work, not only recipes already seen at a later stop.
+ let groups=schedule(original),candidate=replay(groups,finalOnly,original.rounds);
+ if(valid(candidate)){
+  consider(candidate,groups,finalOnly);
+  // Remove whole groups/chunks first. A failed removal is split to identify the
+  // small set of crafts that truly has to happen before the end of the loop.
+  function remove(i,refs,limit=65){
+   if(!refs.length||calls>=limit)return;
+   const next=groups.map(g=>({...g,recipes:[...g.recipes],optionalActive:[...g.optionalActive]}));
+   next[i].recipes=next[i].recipes.filter(id=>!refs.includes(id));next[i].optionalActive=next[i].optionalActive.filter(id=>next[i].recipes.includes(id));
+   const r=replay(next,finalOnly,original.rounds);
+   if(valid(r)){groups=next;candidate=r;consider(r,groups,finalOnly);return;}
+   if(refs.length>1){const mid=Math.floor(refs.length/2);remove(i,refs.slice(0,mid),limit);remove(i,refs.slice(mid),limit);}
+  }
+  for(let i=0;i<groups.length;i++)remove(i,[...groups[i].recipes].reverse());
+  // Identical/empty stretches do not require a setup change. Union small sets
+  // only when a full replay proves they can stay loaded across both stretches.
+  for(let i=0;i+1<groups.length;i++){
+   const a=groups[i],b=groups[i+1],recipes=[...new Set([...a.recipes,...b.recipes])];if(recipes.length>best.slots)continue;
+   const next=groups.map(g=>({...g}));next.splice(i,2,{start:a.start,end:b.end,recipes,optionalActive:[...new Set([...a.optionalActive,...b.optionalActive])]});
+   const r=replay(next,finalOnly,original.rounds);
+   if(valid(r)){groups=next;candidate=r;consider(r,groups,finalOnly);i--;}
+  }
+  // Coalescing stretches changes ingredient availability. Recheck the small
+  // remaining sets so obsolete early recipes do not survive the first pass.
+  for(let i=0;i<groups.length;i++)remove(i,[...groups[i].recipes].reverse(),80);
+ }
+ best.scheduleEffort=effort(best);best.checkpointRecipes=chosen.checkpoints;
+ if(settings._trace||settings._traceInventory){const r=simulateInventoryRoute(plan,items,locations,{...settings,_rounds:best.rounds,_activeGroups:chosen.groups,_checkpointRecipes:chosen.checkpoints,_groupSpan:1});r.scheduleEffort=best.scheduleEffort;r.checkpointRecipes=chosen.checkpoints;return r;}
  return best;
+}
+// UI-only changes must not rerun the complete schedule search. Cache by values,
+// including catalog and plan data, so edits and data refreshes cannot go stale.
+let lastInventoryRoute=null;
+function inventoryRoute(plan,items,locations,settings){
+ if(Object.keys(settings).some(key=>key.startsWith('_')))return computeInventoryRoute(plan,items,locations,settings);
+ const options=Object.fromEntries(['inventory_size','craftworks_slots','route_method','route_foods','wanderer','lemon_squeezer','cinnamon','sprint_shoes','effectiveness_upgrades','cider_rolls'].map(key=>[key,settings[key]]));
+ const key=JSON.stringify([plan,items,locations,options]);
+ if(lastInventoryRoute?.key===key)return lastInventoryRoute.result;
+ const result=computeInventoryRoute(plan,items,locations,settings);lastInventoryRoute={key,result};return result;
 }
 function craftworksDisplayOrder(ids,requiredIds){const required=new Set(requiredIds);return [...ids].reverse().filter(id=>required.has(id)).concat([...ids].reverse().filter(id=>!required.has(id)));}
 if(typeof module!=='undefined')module.exports={inventoryRoute,craftworksDisplayOrder};
