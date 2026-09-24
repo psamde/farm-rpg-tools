@@ -17,7 +17,7 @@ assert.equal(r.activeGroups[0].amounts.block,200);
 assert.equal(flow.length,2);assert.equal(flow[0].stock.ring||0,0);assert.equal(flow[0].stock.gem,100);
 assert.ok(Object.values(r.inventoryPeaks).every(q=>q<=500+1e-7));
 const delayed=inventoryRoute(plan,items,locations,{...settings,_noConsolidation:true,_activeGroups:[{start:0,end:1,recipes:[]}],_groupSpan:1});
-assert.equal(delayed.complete,false);assert.equal(delayed.failure.kind,'capacity');assert.deepEqual(delayed.failure.items,['stone']);
+assert.equal(delayed.complete,false);assert.equal(delayed.failure.kind,'needed_supply');assert.deepEqual(delayed.failure.items,['stone']);
 // Extra room removes the reason to craft blocks during exploration at all.
 const roomy=inventoryRoute(plan,items,locations,{...settings,inventory_size:1000});
 assert.equal(roomy.complete,true);assert.ok(roomy.activeGroups.every(g=>!g.recipes.length));

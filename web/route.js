@@ -49,11 +49,21 @@ function simulateInventoryRoute(plan, items, locations, settings){
   return {id:a.location_id,name:a.name,explores:a.explores,perDrink,staminaPerDrink:method==='Cider'?rolls*(1-wanderer)*(foods.neigh?.8:1):0,left:Math.ceil(a.explores/perDrink-1e-9),total:Math.ceil(a.explores/perDrink-1e-9),
    drops:Object.entries(a.items.filter(d=>!free.has(d.item_id)).reduce((totals,d)=>{totals[d.item_id]=(totals[d.item_id]||0)+d.expected_drops/a.explores*perDrink;return totals;},{})).map(([id,q])=>({id,q}))};
  });
- const totals={...remaining},requiredTotals={...requiredRemaining},optionalTotals={...optionalRemaining},gross={};
- for(const p of parts)for(const d of p.drops)gross[d.id]=(gross[d.id]||0)+d.q*p.total;
- for(const [id,n] of Object.entries(totals))if(!free.has(id))gross[id]=(gross[id]||0)+n*(items[id].output_quantity||1);
- let rounds=settings._rounds||Math.max(1,...Object.values(gross).map(n=>Math.ceil(2*n/capacity)));
+ const totals={...remaining},requiredTotals={...requiredRemaining},optionalTotals={...optionalRemaining},produced={},demand={...targetReserves};
+ for(const [id,n] of Object.entries(totals)){
+  if(!free.has(id))produced[id]=n*recipes[id].out;
+  for(const [child,q] of recipes[id].ingredients)demand[child]=(demand[child]||0)+n*q;
+ }
+ // Size the initial loop from planned work, never from unused exploration
+ // drops. Incoming supplies live outside the cap; crafted output still needs room.
+ const requiredExploreSupply=Object.fromEntries(Object.entries(demand).filter(([id])=>!free.has(id)).map(([id,q])=>[id,Math.max(0,q-(produced[id]||0)-(incoming[id]||0))]));
+ let rounds=settings._rounds||Math.max(1,...Object.values(requiredExploreSupply).concat(Object.values(produced)).map(n=>Math.ceil(2*n/capacity)));
  for(const p of parts){p.batch=Math.max(drinksPerClick,Math.ceil(p.total/rounds/drinksPerClick)*drinksPerClick);p.left=p.batch*rounds;p.scheduled=p.left;}
+ const dropTotals={},lost={},lostByLocation={};
+ for(const p of parts)for(const d of p.drops)dropTotals[d.id]=(dropTotals[d.id]||0)+d.q*p.scheduled;
+ // Only mathematically surplus drops may be lost. Reject earlier than the
+ // final replay check when overflow would consume any needed supply.
+ const surplusRoom=id=>Math.max(0,(dropTotals[id]||0)-(requiredExploreSupply[id]||0)-(lost[id]||0));
  // Forecast actual payable crafts, consuming ingredients as we go. A single
  // shared ingredient is not enough to put every descendant into Craftworks.
  const activeGroups=[],forecastStock={...incoming};
@@ -234,14 +244,17 @@ function simulateInventoryRoute(plan, items, locations, settings){
    const v={id:p.id,name:p.name,drinks:0,explores:0,after:uses,round};visits.push(v);
    for(let j=0;j<p.batch&&!problem;){
     let clicks=(p.batch-j)/drinksPerClick;
-    for(const d of p.drops)if(d.q>0)clicks=Math.min(clicks,Math.floor((capacity-(stock[d.id]||0)+1e-7)/(d.q*drinksPerClick)));
-    if(clicks<1){const blocked=p.drops.filter(d=>(stock[d.id]||0)+d.q*drinksPerClick>capacity+1e-7);failure={kind:'capacity',round,place:placeIndex,items:blocked.map(d=>d.id),stock:{...stock},incoming:{...incoming},remaining:{...remaining}};const blockers=blocked.map(d=>items[d.id]?.name||d.id);problem=`The loop needs more room for ${blockers.slice(0,4).join(', ')}. Its full inventory sequence could not be verified.`;break;}
-    // Until the next payable craft, drops only increase stock. Checking the
-    // endpoint proves every intervening click fits, including five-drink food.
+    for(const d of p.drops)if(d.q>0)clicks=Math.min(clicks,Math.floor((capacity-(stock[d.id]||0)+surplusRoom(d.id)+1e-7)/(d.q*drinksPerClick)));
+    if(clicks<1){const ids=p.drops.filter(d=>(stock[d.id]||0)+d.q*drinksPerClick>capacity+surplusRoom(d.id)+1e-7).map(d=>d.id);failure={kind:'needed_supply',round,place:placeIndex,items:ids,remaining:{...remaining}};problem='These visits would lose '+ids.slice(0,4).map(id=>items[id]?.name||id).join(', ')+' needed for planned crafts or targets.';break;}
+    // Exploration overflow is surplus only if all planned work still finishes.
+    // Keep the physical cap: clip drops, never invent stock or discard crafted
+    // output. The completion checks reject schedules that lose needed supply.
+    // Until another recipe becomes payable, stock can only rise or saturate,
+    // so this endpoint is equivalent to checking each whole drink/food click.
     clicks=settings._singleClick?1:Math.min(clicks,nextCraftClick(p,visitRecipes[placeIndex]));
     verificationSteps++;
     const drinks=clicks*drinksPerClick;
-    for(const d of p.drops){const quantity=d.q*drinks;stock[d.id]=(stock[d.id]||0)+quantity;future[d.id]-=quantity;checkStock(d.id);}if(problem)break;
+    for(const d of p.drops){const quantity=d.q*drinks,total=(stock[d.id]||0)+quantity,overflow=Math.max(0,total-capacity);if(overflow){lost[d.id]=(lost[d.id]||0)+overflow;const at=lostByLocation[p.id]||(lostByLocation[p.id]={});at[d.id]=(at[d.id]||0)+overflow;}stock[d.id]=total-overflow;future[d.id]-=quantity;checkStock(d.id);}if(problem)break;
     p.left-=drinks;uses+=drinks;j+=drinks;v.drinks+=drinks;v.explores+=p.perDrink*drinks;craft(visitRecipes[placeIndex]);
    }
    if(!continuous&&stopPlaces.has(placeIndex))atStop(p.id);
@@ -251,9 +264,9 @@ function simulateInventoryRoute(plan, items, locations, settings){
  }
  // Empty completed stacks when needed to finish the remaining crafts.
  if(!problem){allowRound();let previous=-1;while(Object.values(remaining).some(n=>n)&&previous!==crafts){previous=crafts;clearFinished();atStop('finish');}
-  if(Object.values(remaining).some(n=>n))problem='The expected drops do not finish every craft within this inventory size. Increase capacity or review the starting inventory.';
+  if(Object.values(remaining).some(n=>n)){const unfinished=Object.keys(remaining).filter(id=>remaining[id]>0);failure={kind:'craft_shortfall',items:unfinished,remaining:{...remaining}};problem='These visits cannot finish every planned craft: '+unfinished.slice(0,4).map(id=>items[id]?.name||id).join(', ')+'. Needed ingredients must fit before crafting.';}
  }
- if(!problem){deliverTargets();if(Object.entries(targetReserves).some(([id,q])=>(delivered[id]||0)+1e-6<q))problem='The route does not preserve every required target output.';}
+ if(!problem){deliverTargets();if(Object.entries(targetReserves).some(([id,q])=>(delivered[id]||0)+1e-6<q)){failure={kind:'target_shortfall',items:Object.keys(targetReserves).filter(id=>(delivered[id]||0)+1e-6<targetReserves[id])};problem='The route does not preserve every required target output.';}}
  if(!problem&&!settings._rounds&&rounds>1){
   let best=simulateInventoryRoute(plan,items,locations,{...settings,_rounds:rounds}),low=1,high=rounds-1;
   // A bounded search for larger batches; this is a heuristic, not a global optimum.
@@ -275,7 +288,7 @@ function simulateInventoryRoute(plan, items, locations, settings){
   }
   return {id,name:id==='start'?'Before the first location':id==='finish'?'After the final loop':`After ${parts.find(p=>p.id===id)?.name||'the final location'}`,once,firstRound:atRounds[0],lastRound:atRounds.at(-1),runCount:atRounds.length,recipes,sets,setPhases,setAmounts,amounts:Object.fromEntries(recipes.map(ref=>[ref,work[ref]/(once?1:rounds)]))};
  });
- return {failure,deferredStops:settings._deferredStops||{},unsafeMerges:[...unsafeMerges.values()],priorityStages,releasePlace,requiredRecipes:[...requiredIds],contestedOptional:[...contestedOptional],deliveredTargets:delivered,capacity,inventoryPeaks,verificationSteps,inventoryVerified:!problem,method,drinksPerClick,activeWork,stamina:parts.reduce((n,p)=>n+p.scheduled*p.staminaPerDrink,0),rounds,slots,setups,continuous,interval,activeGroups:activeGroups.map(g=>({...g,amounts:Object.fromEntries(Object.entries(groupWork[g.start]||{}).map(([id,q])=>[id,q/rounds])),from:parts[g.start].name,to:parts[g.end].name,after:g.start?parts[g.start-1].id:null})),craftStops,minimumContinuousSlots:order.length,minimumStopSlots:Math.max(0,...craftStops.map(s=>s.recipes.length)),crafting:order.map(id=>({id,perLoop:totals[id]/rounds,total:totals[id]})),extraExplores:parts.reduce((n,p)=>n+p.scheduled*p.perDrink-p.explores,0),parts:parts.map(p=>({...p,visits:visits.filter(v=>v.id===p.id).length,maxRun:visits.reduce((n,v)=>v.id===p.id?Math.max(n,v.drinks):n,0)})),visits,empties,problem,uses,complete:!problem};
+ return {requiredExploreSupply,dropTotals,overflow:lost,overflowByLocation:lostByLocation,surplusOverflow:Object.entries(lost).filter(([,q])=>q>1e-7).map(([id,quantity])=>({id,quantity,percent:100*quantity/dropTotals[id],expectedDrops:dropTotals[id]})).sort((a,b)=>b.quantity-a.quantity),failure,deferredStops:settings._deferredStops||{},unsafeMerges:[...unsafeMerges.values()],priorityStages,releasePlace,requiredRecipes:[...requiredIds],contestedOptional:[...contestedOptional],deliveredTargets:delivered,capacity,inventoryPeaks,verificationSteps,inventoryVerified:!problem,method,drinksPerClick,activeWork,stamina:parts.reduce((n,p)=>n+p.scheduled*p.staminaPerDrink,0),rounds,slots,setups,continuous,interval,activeGroups:activeGroups.map(g=>({...g,amounts:Object.fromEntries(Object.entries(groupWork[g.start]||{}).map(([id,q])=>[id,q/rounds])),from:parts[g.start].name,to:parts[g.end].name,after:g.start?parts[g.start-1].id:null})),craftStops,minimumContinuousSlots:order.length,minimumStopSlots:Math.max(0,...craftStops.map(s=>s.recipes.length)),crafting:order.map(id=>({id,perLoop:totals[id]/rounds,total:totals[id]})),extraExplores:parts.reduce((n,p)=>n+p.scheduled*p.perDrink-p.explores,0),parts:parts.map(p=>({...p,visits:visits.filter(v=>v.id===p.id).length,maxRun:visits.reduce((n,v)=>v.id===p.id?Math.max(n,v.drinks):n,0)})),visits,empties,problem,uses,complete:!problem};
 }
 // Choose where crafting is necessary, rather than where it first becomes payable.
 // Every accepted schedule is replayed over all loops with the same craft totals.

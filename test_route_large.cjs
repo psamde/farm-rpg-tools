@@ -35,10 +35,11 @@ for(const factor of [0,45])for(const slots of [1,2])for(const food of [false,tru
  const settings={inventory_size:500,craftworks_slots:slots,route_method:'AP',route_foods:{pie:food},_rounds:10};
  same(inventoryRoute(plan,items,locations,settings),inventoryRoute(plan,items,locations,{...settings,_singleClick:true}));
 }
-// A real overflow remains a failure, even after passing the old 250k cutoff.
+// Unneeded overflow cannot block a long route. A required target still can.
 const lateOverflow={assumptions,item_balances:[],crafts_in_dependency_order:[],areas:[
  {...large.areas[0],items:[{item_id:'a',expected_drops:300}]},
  {location_id:'y',name:'Cave',explores:200,items:[{item_id:'d',expected_drops:2000}]}]};
 const blocked=inventoryRoute(lateOverflow,items,locations,{inventory_size:1000,_rounds:1});
-assert.equal(blocked.uses,300000);assert.equal(blocked.complete,false);assert.match(blocked.problem,/Other/);
+assert.equal(blocked.uses,300001);assert.equal(blocked.complete,true);assert.equal(blocked.overflow.d,1000);
+const target=inventoryRoute({...lateOverflow,item_balances:[{item_id:'d',starting_inventory:0,reserved_target_output:1500}]},items,locations,{inventory_size:1000,_rounds:1});assert.equal(target.complete,false);assert.equal(target.failure.kind,'needed_supply');
 console.log('Large routes: 300,000 drinks, 26,001 rounds, late overflow, and 16 single-click equivalence cases passed.');

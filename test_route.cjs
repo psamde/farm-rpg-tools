@@ -7,7 +7,7 @@ const loc=[{id:'x',base_drop_rate:1}];
 let r=inventoryRoute(plan,items,loc,{inventory_size:400,route_method:'AP'});
 assert.equal(r.complete,true);assert.ok(r.uses>=5);assert.ok(r.empties.length>0);assert.equal(r.uses,r.rounds*r.parts[0].batch);
 assert.equal(r.visits.reduce((s,v)=>s+v.drinks,0),r.uses);
-r=inventoryRoute(plan,items,loc,{inventory_size:100,route_method:'AP'});assert.equal(r.complete,false);assert.match(r.problem,/needs more room/);assert.equal(r.uses,0);
+r=inventoryRoute(plan,items,loc,{inventory_size:100,route_method:'AP',_rounds:1});assert.equal(r.complete,false);assert.equal(r.failure.kind,'needed_supply');assert.equal(r.uses,0);
 const paired={...plan,crafts_in_dependency_order:[{item_id:'b',crafts:200}],areas:[{location_id:'x',name:'A',explores:200,items:[{item_id:'a',expected_drops:200}]},{location_id:'y',name:'C',explores:200,items:[{item_id:'c',expected_drops:200}]}]};
 const pairedItems={...items,c:{name:'Other',direct_ingredients:{},output_quantity:1},b:{name:'Craft',direct_ingredients:{a:1,c:1},output_quantity:1}};
 r=inventoryRoute(paired,pairedItems,[...loc,{id:'y',base_drop_rate:1}],{inventory_size:200});assert.equal(r.complete,true);for(let k=0;k<r.rounds;k++)assert.deepEqual(r.visits.slice(k*2,k*2+2).map(v=>v.id),['x','y']);
@@ -19,7 +19,7 @@ const apFood=inventoryRoute(plan,items,loc,{inventory_size:10000,route_method:'A
 assert.equal(apFood.parts[0].perDrink,320);assert.equal(apFood.stamina,0);
 const pieRoute=inventoryRoute(plan,items,loc,{inventory_size:10000,route_method:'AP',route_foods:{pie:true}});
 assert.equal(pieRoute.drinksPerClick,5);assert.ok(pieRoute.parts.every(p=>p.batch%5===0));
-const pieOverflow=inventoryRoute(plan,items,loc,{inventory_size:400,route_method:'AP',route_foods:{pie:true}});
+const pieOverflow=inventoryRoute(plan,items,loc,{inventory_size:400,route_method:'AP',route_foods:{pie:true},_rounds:1});
 assert.equal(pieOverflow.complete,false); // Single AP fits; five simultaneous APs do not.
 console.log('Food yields, five-drink capacity and stamina checks passed');
 
@@ -94,7 +94,7 @@ assert.equal(carry.complete,true);assert.equal(carry.inventoryVerified,true);ass
 // Multiple rows for one drop must be summed before checking a whole click.
 const repeatedDrops={...plan,crafts_in_dependency_order:[],areas:[{location_id:'x',name:'Forest',explores:200,items:[{item_id:'a',expected_drops:150},{item_id:'a',expected_drops:150}]}]};
 const repeated=inventoryRoute(repeatedDrops,items,loc,{inventory_size:200});
-assert.equal(repeated.complete,false);assert.equal(repeated.uses,0);
+assert.equal(repeated.complete,true);assert.equal(repeated.uses,1);assert.equal(repeated.overflow.a,100);assert.equal(repeated.inventoryPeaks.a,200);
 // Combined five-drink click is checked before any crafting; no within-click relief.
 assert.equal(pieOverflow.inventoryVerified,false);
 assert.throws(()=>inventoryRoute(plan,items,loc,{inventory_size:0}),/Inventory size/);
