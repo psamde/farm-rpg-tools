@@ -359,28 +359,41 @@ function renderSurplusOverflow(loop){
 
 function routeFrequencyLabel(every,rounds){return every>=rounds?'At the end':every===1?'Every loop':`Every ${fmt(every)} loops`;}
 function routeCraftRoutines(stop,loop){
- const groups=new Map(),gcd=(a,b)=>b?gcd(b,a%b):a;
- const frequencies=[...new Set(stop.recipes.map(id=>loop.craftCadence?.[id]||1).filter(n=>n>1))].sort((a,b)=>a-b);
- const rounds=stop.once?[stop.id==='finish'?loop.rounds:stop.firstRound]:Array.from({length:loop.rounds},(_,i)=>i+1);
- for(const round of rounds){
-  const due=frequencies.filter(n=>round===loop.rounds||round%n===0),key=due.join(',');
-  if(!groups.has(key))groups.set(key,{due,rounds:[]});groups.get(key).rounds.push(round);
+ const groups=new Map(),frequency={};
+ // Each recipe belongs to one frequency only. Later groups add work rather
+ // than repeating complete versions of the regular setup.
+ for(const id of stop.recipes){
+  const runs=['required','optional'].flatMap(kind=>Object.entries(stop.runs[kind+':'+id]||{})).filter(([,n])=>n>0);
+  if(!runs.length)continue;
+  const endOnly=runs.every(([round])=>Number(round)===loop.rounds);
+  const every=endOnly?loop.rounds:Math.min(loop.rounds,loop.craftCadence?.[id]||1);
+  frequency[id]=every;
+  if(!groups.has(every)){
+   const rounds=stop.once?[stop.id==='finish'?loop.rounds:stop.firstRound]:Array.from({length:Math.floor(loop.rounds/every)},(_,i)=>(i+1)*every);
+   if(!stop.once&&rounds.at(-1)!==loop.rounds)rounds.push(loop.rounds);
+   groups.set(every,{every,rounds,ids:[]});
+  }
+  groups.get(every).ids.push(id);
  }
- return [...groups.values()].map(group=>{
-  const endOnly=group.rounds.length===1&&group.rounds[0]===loop.rounds;
-  const every=endOnly?loop.rounds:group.due.reduce((a,b)=>a*b/gcd(a,b),1),batches=[];
-  // Filter this routine first, then pack in dependency order. Occasional
-  // ingredients must still precede their consumers across setup boundaries.
+ const routines=[...groups.values()].sort((a,b)=>a.every-b.every).map(group=>{
+  const batches=[];
   for(const kind of ['required','optional']){
-   const amounts=Object.fromEntries(stop.recipes.map(id=>[id,group.rounds.reduce((n,round)=>n+(stop.runs[kind+':'+id]?.[round]||0),0)/group.rounds.length]));
-   const refs=stop.recipes.filter(id=>amounts[id]>0);
+   const amounts=Object.fromEntries(group.ids.map(id=>[id,group.rounds.reduce((n,round)=>n+(stop.runs[kind+':'+id]?.[round]||0),0)/group.rounds.length]));
+   const refs=group.ids.filter(id=>amounts[id]>0);
    for(let i=0;i<refs.length;i+=loop.slots)batches.push({kind,ids:refs.slice(i,i+loop.slots),amounts});
   }
-  return {...group,every,batches,label:stop.id==='start'?'Before starting':routeFrequencyLabel(every,loop.rounds),includesFinal:!endOnly&&group.rounds.includes(loop.rounds)&&every>1};
- }).filter(r=>r.batches.length).sort((a,b)=>a.every-b.every);
+  // An occasional ingredient can feed a regular recipe. Keep that ordering
+  // visible without duplicating either recipe in a second setup.
+  const before=[];
+  for(const consumer of stop.recipes)for(const ingredient of Object.keys(items[consumer]?.direct_ingredients||{})){
+   if(group.ids.includes(ingredient)&&frequency[consumer]<group.every)before.push({ingredient,consumer});
+  }
+  return {...group,batches,before,label:stop.id==='start'?'Before starting':routeFrequencyLabel(group.every,loop.rounds)};
+ });
+ return routines.map((r,i)=>({...r,note:stop.id==='start'?'':r.every>=loop.rounds?(i?'Also run all earlier groups.':''):r.every>1?(groups.has(1)?'Also run Every loop and any other groups due.':'Also run any other groups due.'):'',finalNote:i===routines.length-1&&r.every<loop.rounds?'At the end, run all groups once.':''}));
 }
 function routeCraftRoutine(routine,loop){
- return `<details class="route-routine"><summary><strong>${esc(routine.label)}</strong><span>${routine.batches.length} ${routine.batches.length===1?'setup':'setups'}${routine.includesFinal?' + final loop':''}</span></summary>${routine.batches.map((batch,i)=>`<div class="route-setup-heading"><b>Setup ${i+1}</b><span>${batch.kind==='required'?'Required':'Leftovers'} &middot; ${batch.ids.length}/${loop.slots} slots</span></div><div class="craftworkstable"><table><thead><tr><th>Recipe</th><th>Crafts &asymp;</th></tr></thead><tbody>${[...batch.ids].reverse().map(id=>`<tr><td>${itemName(id,items[id]?.name||id)}</td><td>${batch.amounts[id]<1?'&lt;1':fmt(batch.amounts[id])}</td></tr>`).join('')}</tbody></table></div>`).join('')}</details>`;
+ return `<details class="route-routine"><summary><strong>${esc(routine.label)}</strong><span>${routine.batches.length} ${routine.batches.length===1?'setup':'setups'}</span></summary>${routine.note?`<p class="hint route-routine-note">${esc(routine.note)}</p>`:''}${routine.before.map(({ingredient,consumer})=>`<p class="hint route-routine-note">Make ${itemName(ingredient,items[ingredient]?.name||ingredient)} before ${itemName(consumer,items[consumer]?.name||consumer)} when both are due.</p>`).join('')}${routine.batches.map((batch,i)=>`<div class="route-setup-heading"><b>Setup ${i+1}</b><span>${batch.kind==='required'?'Required':'Leftovers'} &middot; ${batch.ids.length}/${loop.slots} slots</span></div><div class="craftworkstable"><table><thead><tr><th>Recipe</th><th>Crafts &asymp;</th></tr></thead><tbody>${[...batch.ids].reverse().map(id=>`<tr><td>${itemName(id,items[id]?.name||id)}</td><td>${batch.amounts[id]<1?'&lt;1':fmt(batch.amounts[id])}</td></tr>`).join('')}</tbody></table></div>`).join('')}${routine.finalNote?`<p class="hint route-routine-note">${esc(routine.finalNote)}</p>`:''}</details>`;
 }
 function routeSaleGroups(loop,place){
  const rows=new Map();
@@ -407,7 +420,7 @@ function routeSellSection(loop,place){
 function craftworksSetup(plan,loop){
  const checkpoint=stop=>{
   const routines=routeCraftRoutines(stop,loop);
-  return `<section id="craft-stop-${esc(stop.id)}" class="route-instruction-block"><div class="route-instruction-heading"><h4>${esc(stop.name)}</h4><span>Craftworks</span></div>${routines.length>1?'<p class="hint">Use a special routine instead of the regular one whenever it is due.</p>':''}<div class="route-routines">${routines.map(r=>routeCraftRoutine(r,loop)).join('')}</div></section>`;
+  return `<section id="craft-stop-${esc(stop.id)}" class="route-instruction-block"><div class="route-instruction-heading"><h4>${esc(stop.name)}</h4><span>Craftworks</span></div><div class="route-routines">${routines.map(r=>routeCraftRoutine(r,loop)).join('')}</div></section>`;
  };
  const start=loop.craftStops.find(s=>s.id==='start'),finish=loop.craftStops.find(s=>s.id==='finish');
  const sections=(start?checkpoint(start):'')+routeSellSection(loop,'start')+(loop.activeGroups||[]).map((group,i)=>{
@@ -415,7 +428,7 @@ function craftworksSetup(plan,loop){
   const active=group.recipes.length?`<details id="craft-stop-group-${i}" class="craftworksset route-active"><summary>Keep active &middot; ${esc(group.from)}${group.from===group.to?'':' &rarr; '+esc(group.to)}<small>${group.recipes.length}/${loop.slots} slots</small></summary><div class="craftworkstable"><table><thead><tr><th>Recipe</th><th>Crafts per loop &asymp;</th></tr></thead><tbody>${craftworksDisplayOrder(group.recipes,loop.requiredRecipes).map(id=>`<tr><td>${itemName(id,items[id]?.name||id)}</td><td>${(group.amounts?.[id]||0)<1?'&lt;1':fmt(group.amounts[id])}</td></tr>`).join('')}</tbody></table></div></details>`:`<span id="craft-stop-group-${i}" class="route-collect-anchor"></span>`;
   return active+(after?checkpoint(after):'')+routeSellSection(loop,loop.parts[group.end].id);
  }).join('')+(finish?checkpoint(finish):'')+routeSellSection(loop,'finish');
- return `<div class="route-instructions"><p class="hint">Run setups in the order shown. Finished recipes go above their ingredients; required crafts come before leftovers.</p>${sections||'<p class="hint">No crafting needed.</p>'}<details class="route-assumptions"><summary>About these estimates</summary><p class="hint">Quantities are averages for each routine. Stop recipes when their planned amount is done; Craftworks does not enforce these limits automatically. Inventory checks use expected drops, without tick or swap timing.</p></details></div>`;
+ return `<div class="route-instructions"><p class="hint">Run required crafts before leftovers across all groups that are due. Within each setup, put finished recipes above their ingredients.</p>${sections||'<p class="hint">No crafting needed.</p>'}<details class="route-assumptions"><summary>About these estimates</summary><p class="hint">Quantities are averages for each routine. Stop recipes when their planned amount is done; Craftworks does not enforce these limits automatically. Inventory checks use expected drops, without tick or swap timing.</p></details></div>`;
 }
 
 

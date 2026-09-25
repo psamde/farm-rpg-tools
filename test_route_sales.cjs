@@ -52,8 +52,8 @@ const held=inventoryRoute(plan({board:20},20),items,locations,{inventory_size:10
 assert.equal(held.saleCadence.board,20);assert.deepEqual(held.sales.map(s=>s.round),[20]);
 const slow=inventoryRoute(gradualPlan,items,locations,{inventory_size:60,craftworks_slots:2,_rounds:123,_noCadence:true,_singleClick:true});
 assert.deepEqual(slow.sales,gradual.sales);assert.deepEqual(slow.inventoryPeaks,gradual.inventoryPeaks);
-// Grouped instructions need no loop picker and preserve source-before-consumer
-// setup ordering even when regular and occasional recipes are combined.
+// Frequency groups are additive, with each recipe shown only once and
+// ingredient ordering called out when it crosses frequency groups.
 const src=fs.readFileSync('web/app.js','utf8'),ctx=vm.createContext({items,fmt:n=>Math.floor(n).toLocaleString('en-US'),esc:String,itemName:id=>id,craftworksDisplayOrder:ids=>ids});
 vm.runInContext(src.slice(src.indexOf('function routeFrequencyLabel('),src.indexOf("$('routeCards').onclick=")),ctx);
 ctx.small=small;ctx.periodic=periodic;ctx.batch=batch;ctx.gradual=gradual;
@@ -65,12 +65,29 @@ assert.match(vm.runInContext('craftworksSetup(null,batch)',ctx),/Sell these item
 assert.match(vm.runInContext('craftworksSetup(null,batch)',ctx),/sell between them/);
 assert.doesNotMatch(vm.runInContext('craftworksSetup(null,gradual)',ctx),/Show loop|type="number"|data-sale-loop|data-craft-loop/);
 ctx.cross={recipes:['board','goal'],runs:{'required:board':{2:20},'required:goal':{1:5,2:5}}};ctx.loop={slots:1,rounds:2,craftCadence:{board:2}};
-assert.equal(vm.runInContext("JSON.stringify(routeCraftRoutines(cross,loop)[1].batches.map(b=>b.ids))",ctx),JSON.stringify([['board'],['goal']]));
+assert.equal(vm.runInContext("JSON.stringify(routeCraftRoutines(cross,loop)[1].batches.map(b=>b.ids))",ctx),JSON.stringify([['board']]));
 assert.equal(vm.runInContext("JSON.stringify(routeCraftRoutines(cross,loop)[0].batches.map(b=>b.ids))",ctx),JSON.stringify([['goal']]));
 assert.match(vm.runInContext('routeTransition(periodic,periodic.parts[0],0)',ctx),/data-craft-stop="woods"/);
+assert.match(vm.runInContext('routeCraftRoutine(routeCraftRoutines(cross,loop)[1],loop)',ctx),/Also run all earlier groups/);
+assert.match(vm.runInContext('routeCraftRoutine(routeCraftRoutines(cross,loop)[1],loop)',ctx),/Make board before goal/);
+ctx.multi={recipes:['wood','board','goal','bonus'],runs:{
+ 'required:wood':Object.fromEntries(Array.from({length:205},(_,i)=>[i+1,1])),
+ 'optional:board':{50:50,100:50,150:50,200:50,205:5},
+ 'optional:goal':{100:100,200:100,205:5},'optional:bonus':{205:10}}};
+ctx.multiLoop={slots:22,rounds:205,craftCadence:{board:50,goal:100,bonus:205}};
+assert.equal(vm.runInContext('JSON.stringify(routeCraftRoutines(multi,multiLoop).map(r=>r.batches.flatMap(b=>b.ids)))',ctx),JSON.stringify([['wood'],['board'],['goal'],['bonus']]));
+assert.match(vm.runInContext('routeCraftRoutine(routeCraftRoutines(multi,multiLoop)[2],multiLoop)',ctx),/Also run Every loop and any other groups due/);
+assert.match(vm.runInContext('routeCraftRoutine(routeCraftRoutines(multi,multiLoop)[3],multiLoop)',ctx),/Also run all earlier groups/);
+assert.doesNotMatch(vm.runInContext('craftworksSetup(null,gradual)',ctx),/instead of the regular/);
+
 // All displayed routines together account for every recorded craft, without
-// duplicating primary or periodic batches across routine alternatives.
+// duplicating primary or periodic batches across additive frequency groups.
 ctx.conserve=periodic;
+assert.ok(vm.runInContext(`conserve.craftStops.every(stop=>{
+ const routines=routeCraftRoutines(stop,conserve);
+ return Object.entries(stop.runs).every(([key,runs])=>{const [kind,id]=key.split(':');const reported=routines.reduce((total,r)=>total+r.batches.filter(b=>b.kind===kind&&b.ids.includes(id)).reduce((n,b)=>n+b.amounts[id]*r.rounds.length,0),0);return Math.abs(reported-Object.values(runs).reduce((a,b)=>a+b,0))<1e-7;});
+})`,ctx));
+ctx.conserve={...ctx.multiLoop,craftStops:[ctx.multi]};
 assert.ok(vm.runInContext(`conserve.craftStops.every(stop=>{
  const routines=routeCraftRoutines(stop,conserve);
  return Object.entries(stop.runs).every(([key,runs])=>{const [kind,id]=key.split(':');const reported=routines.reduce((total,r)=>total+r.batches.filter(b=>b.kind===kind&&b.ids.includes(id)).reduce((n,b)=>n+b.amounts[id]*r.rounds.length,0),0);return Math.abs(reported-Object.values(runs).reduce((a,b)=>a+b,0))<1e-7;});

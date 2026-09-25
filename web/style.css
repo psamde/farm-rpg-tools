@@ -544,3 +544,5 @@ dialog,#suggestionsDialog{position:fixed;inset:0;margin:auto;max-height:calc(100
 html[data-theme="light"] .route-sell .route-instruction-heading h4,html[data-theme="light"] .routetransition button.route-sell-button{color:#76501a}
 
 .route-sale-quantity{text-align:right}.route-sale-quantity small{margin:4px 0 0;max-width:150px}
+
+.route-routine>.route-routine-note{margin:12px 14px;font-size:12px;line-height:1.5}
