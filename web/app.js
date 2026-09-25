@@ -329,7 +329,7 @@ function renderRoute(){if(!result||$('resultContent').classList.contains('stale'
 
  try{const p=result.plans[selected],r=inventoryRoute(p,items,catalog.locations,state),drink=r.method==='AP'?'APs':'Ciders';
 
- $('routeCards').innerHTML=r.parts.map((a,i)=>{const groupIndex=r.activeGroups.findIndex(g=>g.start<=i&&g.end>=i),group=r.activeGroups[groupIndex];const loc=catalog.locations.find(l=>l.id===a.id);return `${i===group.start?`<section class="routegroup"><button class="routegroupbadge" type="button" data-craft-stop="group-${groupIndex}" title="${group.recipes.length?'Keep this Craftworks setup across the outlined locations':'Needed ingredients can wait until later; surplus may overflow'}" aria-label="${group.recipes.length?'Open active Craftworks setup':'Open crafting instructions after collecting'}">${group.recipes.length?'⚒ <span>Active setup</span>':'<span>Collect first · craft later</span>'}</button><div class="routegroupcards">`:""}<article class="routecard">${loc.image?`<img class="gameicon" src="${esc(loc.image)}" width="48" height="48" alt="" loading="lazy">`:'<span class="areaicon" aria-hidden="true">⌖</span>'}<small>STOP ${i+1}</small><strong>${esc(a.name)}</strong><b>${fmt(a.batch*a.perDrink)}</b><small>expected explores per loop</small><p><strong>${fmt(a.batch)} ${drink}</strong> each visit</p><small>${fmt(a.batch/r.drinksPerClick)} clicks${r.method==='Cider'?` · ${fmt(Math.ceil(a.batch*a.staminaPerDrink))} stamina`:''}</small><small>${fmt(a.explores)} explores in the original plan</small></article>${i===group.end?"</div></section>":""}${routeTransition(r,a,i)}`;}).join('')||'<p>No exploration needed.</p>';
+ $('routeCards').innerHTML=r.parts.map((a,i)=>{const groupIndex=r.activeGroups.findIndex(g=>g.start<=i&&g.end>=i),group=r.activeGroups[groupIndex];const loc=catalog.locations.find(l=>l.id===a.id);return `${i===group.start?`<section class="routegroup"><button class="routegroupbadge" type="button" data-craft-stop="${group.recipes.length?'group-'+groupIndex:(r.craftStops.find(s=>r.parts.findIndex(p=>p.id===s.id)>=group.end)?.id||'finish')}" title="${group.recipes.length?'Keep this Craftworks setup across the outlined locations':'Needed ingredients can wait until later; surplus may overflow'}" aria-label="${group.recipes.length?'Open active Craftworks setup':'Open crafting instructions after collecting'}">${group.recipes.length?'⚒ <span>Active setup</span>':'<span>Collect first · craft later</span>'}</button><div class="routegroupcards">`:""}<article class="routecard">${loc.image?`<img class="gameicon" src="${esc(loc.image)}" width="48" height="48" alt="" loading="lazy">`:'<span class="areaicon" aria-hidden="true">⌖</span>'}<small>STOP ${i+1}</small><strong>${esc(a.name)}</strong><b>${fmt(a.batch*a.perDrink)}</b><small>expected explores per loop</small><p><strong>${fmt(a.batch)} ${drink}</strong> each visit</p><small>${fmt(a.batch/r.drinksPerClick)} clicks${r.method==='Cider'?` · ${fmt(Math.ceil(a.batch*a.staminaPerDrink))} stamina`:''}</small><small>${fmt(a.explores)} explores in the original plan</small></article>${i===group.end?"</div></section>":""}${routeTransition(r,a,i)}`;}).join('')||'<p>No exploration needed.</p>';
 
  $('routeStatus').textContent=r.problem?`Loop estimate — inventory verification incomplete: ${r.problem}`:r.parts.length?`Repeat this circuit ${fmt(r.rounds)} ${r.rounds===1?'time':'times'}. ${fmt(r.uses)} ${drink} total${r.method==='Cider'?` + ${fmt(Math.ceil(r.stamina))} stamina`:''} · ≈ ${fmt(r.extraExplores)} extra explores from repeatable whole-drink batches. All planned crafts and targets checked against your ${fmt(r.capacity)} inventory limit. Unused exploration drops may overflow. Sell crafted surplus at the marked stops.`:state.planner_mode==='passive'?'No exploration needed. Craft from this production batch.':(!Object.keys(activeTargets()).length&&!p.crafts_in_dependency_order.length&&!p.secondary?.crafts_in_dependency_order?.length?'All primary targets are provided. No exploration or crafting needed.':'No exploration needed. Craft from starting inventory.');
 
@@ -337,11 +337,7 @@ function renderRoute(){if(!result||$('resultContent').classList.contains('stale'
  renderSurplusOverflow(r);
  renderNonCraftingDrops(result.plans[selected]);
  $('craftworksSetup').innerHTML=craftworksSetup(result.plans[selected],r);
- $('craftworksSetup').onchange=e=>{
-  const input=e.target;if(!input.matches('[data-sale-loop],[data-craft-loop]')||!input.reportValidity())return;
-  if(input.dataset.saleLoop!==undefined)input.closest('details').querySelector('.route-sale-rows').innerHTML=routeSaleRows(r,input.dataset.saleLoop,Number(input.value));
-  else{const stop=r.craftStops.find(s=>s.id===input.dataset.craftLoop);input.closest('details').querySelector('.route-craft-rows').innerHTML=routeCraftStopRows(stop,r,Number(input.value));}
- };
+
 
 
 
@@ -361,50 +357,65 @@ function renderSurplusOverflow(loop){
  box.innerHTML=box.hidden?'':surplusOverflowReport(loop);
 }
 
-function routeBatchTiming(schedule,loop){
- if(schedule.every>=loop.rounds&&loop.rounds>1)return 'Final loop only';
- if(schedule.every>1)return `Every ${fmt(schedule.every)} loops${loop.rounds%schedule.every?' + final loop':''}`;
- return 'Each loop';
-}
-// Filter the current loop first, then pack dependency-ordered recipes into
-// slots. Grouping recipes by frequency would put some consumers before inputs.
-function routeStopBatches(stop,loop,round){
- const batches=[];
- for(const kind of ['required','optional']){
-  const refs=stop.recipes.filter(id=>(stop.runs[kind+':'+id]?.[round]||0)>0);
-  for(let i=0;i<refs.length;i+=loop.slots)batches.push({kind,ids:refs.slice(i,i+loop.slots)});
+function routeFrequencyLabel(every,rounds){return every>=rounds?'At the end':every===1?'Every loop':`Every ${fmt(every)} loops`;}
+function routeCraftRoutines(stop,loop){
+ const groups=new Map(),gcd=(a,b)=>b?gcd(b,a%b):a;
+ const frequencies=[...new Set(stop.recipes.map(id=>loop.craftCadence?.[id]||1).filter(n=>n>1))].sort((a,b)=>a-b);
+ const rounds=stop.once?[stop.id==='finish'?loop.rounds:stop.firstRound]:Array.from({length:loop.rounds},(_,i)=>i+1);
+ for(const round of rounds){
+  const due=frequencies.filter(n=>round===loop.rounds||round%n===0),key=due.join(',');
+  if(!groups.has(key))groups.set(key,{due,rounds:[]});groups.get(key).rounds.push(round);
  }
- return batches;
+ return [...groups.values()].map(group=>{
+  const endOnly=group.rounds.length===1&&group.rounds[0]===loop.rounds;
+  const every=endOnly?loop.rounds:group.due.reduce((a,b)=>a*b/gcd(a,b),1),batches=[];
+  // Filter this routine first, then pack in dependency order. Occasional
+  // ingredients must still precede their consumers across setup boundaries.
+  for(const kind of ['required','optional']){
+   const amounts=Object.fromEntries(stop.recipes.map(id=>[id,group.rounds.reduce((n,round)=>n+(stop.runs[kind+':'+id]?.[round]||0),0)/group.rounds.length]));
+   const refs=stop.recipes.filter(id=>amounts[id]>0);
+   for(let i=0;i<refs.length;i+=loop.slots)batches.push({kind,ids:refs.slice(i,i+loop.slots),amounts});
+  }
+  return {...group,every,batches,label:stop.id==='start'?'Before starting':routeFrequencyLabel(every,loop.rounds),includesFinal:!endOnly&&group.rounds.includes(loop.rounds)&&every>1};
+ }).filter(r=>r.batches.length).sort((a,b)=>a.every-b.every);
 }
-function routeCraftStopRows(stop,loop,round){
- return routeStopBatches(stop,loop,round).map((batch,i)=>`<h4>Setup ${i+1} &middot; ${batch.kind==='required'?'Required crafts':'Optional leftovers'} &middot; ${batch.ids.length} / ${loop.slots} slots</h4><div class="craftworkstable"><table><thead><tr><th>Recipe</th><th>Crafts this loop &asymp;</th></tr></thead><tbody>${[...batch.ids].reverse().map(id=>`<tr><td>${itemName(id,items[id]?.name||id)}</td><td>${fmt(stop.runs[batch.kind+':'+id][round])}</td></tr>`).join('')}</tbody></table></div>`).join('')||'<p class="hint">No additional crafting at this stop on this loop.</p>';
+function routeCraftRoutine(routine,loop){
+ return `<details class="route-routine"><summary><strong>${esc(routine.label)}</strong><span>${routine.batches.length} ${routine.batches.length===1?'setup':'setups'}${routine.includesFinal?' + final loop':''}</span></summary>${routine.batches.map((batch,i)=>`<div class="route-setup-heading"><b>Setup ${i+1}</b><span>${batch.kind==='required'?'Required':'Leftovers'} &middot; ${batch.ids.length}/${loop.slots} slots</span></div><div class="craftworkstable"><table><thead><tr><th>Recipe</th><th>Crafts &asymp;</th></tr></thead><tbody>${[...batch.ids].reverse().map(id=>`<tr><td>${itemName(id,items[id]?.name||id)}</td><td>${batch.amounts[id]<1?'&lt;1':fmt(batch.amounts[id])}</td></tr>`).join('')}</tbody></table></div>`).join('')}</details>`;
 }
-function routeOccasionalCrafts(stop,loop){
- const refs=stop.recipes.filter(id=>loop.craftCadence?.[id]>1);if(!refs.length)return '';
- return `<details class="route-occasional"><summary>Occasional crafts &middot; ${refs.length} recipes</summary><p class="hint">These replace their tiny batches each loop. Select the loop number below to see the complete setup in the right order.</p>${[...new Set(refs.map(id=>loop.craftCadence[id]))].sort((a,b)=>a-b).map(every=>`<p class="craftworks-cadence">${routeBatchTiming({every},loop)}</p><div class="route-occasional-items">${refs.filter(id=>loop.craftCadence[id]===every).map(id=>itemName(id,items[id]?.name||id)).join('')}</div>`).join('')}</details>`;
-}
-function routeSaleRows(loop,place,round){
- const events=(loop.sales||[]).filter(s=>s.place===place&&s.round===round);
- return events.map((event,i)=>`${events.length>1?`<p class="hint">Sale ${i+1} &middot; before continuing this crafting batch</p>`:''}<div class="craftworkstable"><table><thead><tr><th>Item</th><th>Sell &asymp;</th><th>Keep for crafts</th></tr></thead><tbody>${event.items.map(row=>`<tr><td>${itemName(row.id,items[row.id]?.name||row.id)}</td><td>${fmt(row.quantity)}</td><td>${fmt(Math.ceil(row.keep))}</td></tr>`).join('')}</tbody></table></div>`).join('')||'<p class="hint">No selling needed this loop.</p>';
+function routeSaleGroups(loop,place){
+ const rows=new Map();
+ for(const sale of loop.sales||[])if(sale.place===place)for(const item of sale.items){
+  if(!rows.has(item.id))rows.set(item.id,{id:item.id,runs:{},events:{},keeps:[]});
+  const row=rows.get(item.id);row.runs[sale.round]=(row.runs[sale.round]||0)+item.quantity;row.events[sale.round]=(row.events[sale.round]||0)+1;row.keeps.push(item.keep);
+ }
+ const groups=new Map();
+ for(const row of rows.values()){
+  const rounds=Object.keys(row.runs).map(Number),endOnly=rounds.every(n=>n===loop.rounds);
+  const every=endOnly?loop.rounds:loop.saleCadence?.[row.id]||1;
+  if(!groups.has(every))groups.set(every,{every,rows:[]});
+  const regular=rounds.filter(n=>n<loop.rounds),amounts=(regular.length?regular:rounds).map(n=>row.runs[n]);
+  const runs=regular.length?regular:rounds,batches=Math.max(...runs.map(n=>row.events[n]));
+  groups.get(every).rows.push({...row,batches,quantity:amounts.reduce((a,b)=>a+b,0)/runs.reduce((sum,n)=>sum+row.events[n],0),keep:Math.max(...row.keeps),endOnly});
+ }
+ return [...groups.values()].sort((a,b)=>a.every-b.every);
 }
 function routeSellSection(loop,place){
- const events=(loop.sales||[]).filter(s=>s.place===place);if(!events.length)return '';
- const when=place==='finish'?'After final crafting':place==='start'?'Before exploring':`After ${loop.parts.find(p=>p.id===place)?.name||'crafting'}`;
- const first=events[0].round;
- return `<details id="craft-stop-sell-${esc(place)}" class="craftworksset route-sell"><summary>Sell these items &middot; ${esc(when)}</summary><p class="hint">After crafting, set aside or hand in your goal items. Sell only the listed surplus; keep the remaining ingredients. If a final batch fills a stack, sell its surplus before continuing.</p><label class="route-sale-loop">Show loop <input type="number" min="1" max="${loop.rounds}" step="1" value="${first}" data-sale-loop="${esc(place)}"> of ${fmt(loop.rounds)}</label><div class="route-sale-rows">${routeSaleRows(loop,place,first)}</div></details>`;
+ const groups=routeSaleGroups(loop,place);if(!groups.length)return '';
+ const where=place==='finish'?'After final crafting':place==='start'?'Before exploring':`After ${loop.parts.find(p=>p.id===place)?.name||'crafting'}`;
+ return `<section id="craft-stop-sell-${esc(place)}" class="route-instruction-block route-sell"><div class="route-instruction-heading"><h4>Sell these items</h4><span>${esc(where)}</span></div><p class="hint">Sell from every group that is due, keeping the amounts marked for crafts. Set aside your goals first; sell remaining surplus at the end.</p><div class="route-routines">${groups.map(group=>`<details class="route-routine"><summary><strong>${routeFrequencyLabel(group.every,loop.rounds)}</strong><span>${group.rows.length} ${group.rows.length===1?'item':'items'}</span></summary><div class="route-sale-items">${group.rows.map(row=>`<div class="route-sale-item"><div>${itemName(row.id,items[row.id]?.name||row.id)}${row.keep>=1e-7?`<small>Keep ${fmt(Math.ceil(row.keep-1e-7))} for crafts</small>`:''}</div><div class="route-sale-quantity"><strong title="Expected amount per selling stop; the last sale may be smaller">&asymp; ${fmt(row.quantity)}</strong>${row.batches>1?`<small>${row.batches} batches &middot; sell between them</small>`:''}</div></div>`).join('')}</div></details>`).join('')}</div></section>`;
 }
-
 function craftworksSetup(plan,loop){
  const checkpoint=stop=>{
-  const round=stop.once?(stop.id==='finish'?loop.rounds:stop.firstRound):1;
-  return `<details id="craft-stop-${stop.id}" class="craftworksset"><summary>${esc(stop.name)} &middot; Craftworks</summary><p class="hint">Run these setups in order. Required crafts come first; finished recipes stay above their ingredients within each setup.</p>${routeOccasionalCrafts(stop,loop)}${!stop.once&&loop.rounds>1?`<label class="route-sale-loop">Show loop <input type="number" min="1" max="${loop.rounds}" step="1" value="${round}" data-craft-loop="${esc(stop.id)}"> of ${fmt(loop.rounds)}</label>`:''}<div class="route-craft-rows">${routeCraftStopRows(stop,loop,round)}</div></details>`;
+  const routines=routeCraftRoutines(stop,loop);
+  return `<section id="craft-stop-${esc(stop.id)}" class="route-instruction-block"><div class="route-instruction-heading"><h4>${esc(stop.name)}</h4><span>Craftworks</span></div>${routines.length>1?'<p class="hint">Use a special routine instead of the regular one whenever it is due.</p>':''}<div class="route-routines">${routines.map(r=>routeCraftRoutine(r,loop)).join('')}</div></section>`;
  };
  const start=loop.craftStops.find(s=>s.id==='start'),finish=loop.craftStops.find(s=>s.id==='finish');
  const sections=(start?checkpoint(start):'')+routeSellSection(loop,'start')+(loop.activeGroups||[]).map((group,i)=>{
- const after=loop.craftStops.find(s=>s.id===loop.parts[group.end].id);
- return `<details id="craft-stop-group-${i}" class="craftworksset"><summary>${group.recipes.length?'Keep active':'Collect'}: ${esc(group.from)}${group.from===group.to?'':' → '+esc(group.to)}${group.recipes.length?' · '+group.recipes.length+' / '+loop.slots+' slots':' · craft later'}</summary><p class="hint">${group.recipes.length?'These recipes preserve ingredients needed by later crafts. Required recipes come first; finished items stay above their ingredients.':'No active Craftworks needed here. Keep the collected ingredients for the later setups.'}</p>${group.recipes.length?`<div class="craftworkstable"><table><thead><tr><th>Recipe</th><th>Crafts per loop ≈</th></tr></thead><tbody>${craftworksDisplayOrder(group.recipes,loop.requiredRecipes).map(id=>`<tr><td>${itemName(id,items[id]?.name||id)}</td><td>${(group.amounts?.[id]||0)<1?'&lt;1':fmt(group.amounts[id])}</td></tr>`).join('')}</tbody></table></div>`:''}</details>`+(after?checkpoint(after):'')+routeSellSection(loop,loop.parts[group.end].id);
+  const after=loop.craftStops.find(s=>s.id===loop.parts[group.end].id);
+  const active=group.recipes.length?`<details id="craft-stop-group-${i}" class="craftworksset route-active"><summary>Keep active &middot; ${esc(group.from)}${group.from===group.to?'':' &rarr; '+esc(group.to)}<small>${group.recipes.length}/${loop.slots} slots</small></summary><div class="craftworkstable"><table><thead><tr><th>Recipe</th><th>Crafts per loop &asymp;</th></tr></thead><tbody>${craftworksDisplayOrder(group.recipes,loop.requiredRecipes).map(id=>`<tr><td>${itemName(id,items[id]?.name||id)}</td><td>${(group.amounts?.[id]||0)<1?'&lt;1':fmt(group.amounts[id])}</td></tr>`).join('')}</tbody></table></div></details>`:`<span id="craft-stop-group-${i}" class="route-collect-anchor"></span>`;
+  return active+(after?checkpoint(after):'')+routeSellSection(loop,loop.parts[group.end].id);
  }).join('')+(finish?checkpoint(finish):'')+routeSellSection(loop,'finish');
- return `<div class="sectiontitle"><h3>Craftworks &amp; selling by location</h3></div><p class="hint">Small batches wait until the final loop where inventory allows. Other batches show how often to run them. Exploration surplus may overflow; crafted surplus has a selling stop.</p>${sections||'<p class="hint">No crafting needed.</p>'}<p class="hint">Batch counts are estimates; the final batch may be smaller. Keep the listed quantities for your goals. These are planned quantities, not automatic Craftworks limits—stop completed recipes. Tick and swap times are not modeled.</p>`;
+ return `<div class="route-instructions"><p class="hint">Run setups in the order shown. Finished recipes go above their ingredients; required crafts come before leftovers.</p>${sections||'<p class="hint">No crafting needed.</p>'}<details class="route-assumptions"><summary>About these estimates</summary><p class="hint">Quantities are averages for each routine. Stop recipes when their planned amount is done; Craftworks does not enforce these limits automatically. Inventory checks use expected drops, without tick or swap timing.</p></details></div>`;
 }
 
 
@@ -414,9 +425,9 @@ function routeTransition(loop,area,index){const sell=(loop.sales||[]).some(s=>s.
  const candidate=nextIndex>=0?loop.activeGroups[nextIndex]:null;
  const next=candidate&&(candidate.recipes.length||current?.recipes.length)?candidate:null;
  const label=stop?`After ${area.name}: finish this stretch’s crafting${next?`, then ${next.recipes.length?'load the next setup':'pause Craftworks'}`:''}. Open setup.`:next?next.recipes.length?`Change Craftworks for ${next.from} through ${next.to}. Open setup.`:'Pause Craftworks for this collecting stretch. Open instructions.':'Keep the current setup active';
- return `<div class="routetransition${last?' looptransition':''}" title="${esc(label)}${last?' Sell listed surplus and repeat loop.':''}"><span aria-hidden="true">${last?'↻':'→'}</span>${stop||next?`<button type="button" data-craft-stop="${stop?esc(area.id):'group-'+nextIndex}" aria-label="${esc(label)}"><span aria-hidden="true">⚒</span><small>${stop?routeStopBatches(stop,loop,1).length+(Object.values(loop.craftCadence||{}).some(n=>n>1)?'+':''):next?.recipes.length?1:'Pause'}</small></button>`:''}${sell?`<button class="route-sell-button" type="button" data-craft-stop="sell-${esc(area.id)}">Sell these items</button>`:''}${last?'<span class="sr">Repeat loop.</span>':''}</div>`;}
+ return `<div class="routetransition${last?' looptransition':''}" title="${esc(label)}${last?' Sell listed surplus and repeat loop.':''}"><span aria-hidden="true">${last?'↻':'→'}</span>${stop||next?`<button type="button" data-craft-stop="${stop?esc(area.id):'group-'+nextIndex}" aria-label="${esc(label)}"><span aria-hidden="true">⚒</span><small>${stop?'':next?.recipes.length?1:'Pause'}</small></button>`:''}${sell?`<button class="route-sell-button" type="button" data-craft-stop="sell-${esc(area.id)}">Sell these items</button>`:''}${last?'<span class="sr">Repeat loop.</span>':''}</div>`;}
 
-$('routeCards').onclick=e=>{const b=e.target.closest('[data-craft-stop]');if(!b)return;const panel=document.getElementById('craft-stop-'+b.dataset.craftStop);if(panel){$('craftworksDisclosure').open=true;panel.open=true;panel.scrollIntoView({behavior:'smooth',block:'center'});}};
+$('routeCards').onclick=e=>{const b=e.target.closest('[data-craft-stop]');if(!b)return;const panel=document.getElementById('craft-stop-'+b.dataset.craftStop);if(panel){$('craftworksDisclosure').open=true;if(panel.tagName==='DETAILS')panel.open=true;panel.scrollIntoView({behavior:'smooth',block:'center'});}};
 
 
 const routeFoodChoices={AP:[['chowder','Quandary Chowder','+10% drops · 5 min'],['seltzer','Lemon Seltzer','+50% drops · 50 APs'],['pie','Lemon Cream Pie','5 APs / click · 2 min']],Cider:[['neigh','Neigh','−20% stamina · 5 min'],['cabbage','Cabbage Stew','5 Ciders / click · 2 min']]};

@@ -40,21 +40,39 @@ assert.equal(model.craftMapSurplusLabels({craftable:true,crafts:10,explorationSu
 assert.equal(model.craftMapSurplusLabels({craftable:true,crafts:0,explorationSupplied:true}).sell,'Void/Sell');
 assert.equal(model.craftMapSurplusLabels({craftable:false,explorationSupplied:true}).use,'Use + Void');
 assert.equal(model.craftMapSurplusLabels({craftable:true,crafts:1}).use,'Use + Sell');
-// Exercise the production renderers: final-only counts, per-loop sale amounts,
-// a visible checkpoint, and inventory-only final batches.
+// Crafting and selling have independent schedules. A small output can be
+// crafted each loop, sold every 50 loops, and cleared once at the end.
+const gradualPlan=plan({board:123},123);
+const gradual=inventoryRoute(gradualPlan,items,locations,{inventory_size:60,craftworks_slots:2,_rounds:123,_noCadence:true});
+assert.equal(gradual.complete,true,gradual.problem);assert.equal(gradual.craftCadence.board,undefined);
+assert.equal(gradual.saleCadence.board,50);assert.deepEqual(gradual.sales.map(s=>s.round),[50,100,123]);
+assert.equal(sold(gradual,'board'),123);assert.equal(quantities(gradual).board,123);
+assert.ok(Object.values(gradual.inventoryPeaks).every(q=>q<=60));
+const held=inventoryRoute(plan({board:20},20),items,locations,{inventory_size:100,craftworks_slots:2,_rounds:20,_noCadence:true});
+assert.equal(held.saleCadence.board,20);assert.deepEqual(held.sales.map(s=>s.round),[20]);
+const slow=inventoryRoute(gradualPlan,items,locations,{inventory_size:60,craftworks_slots:2,_rounds:123,_noCadence:true,_singleClick:true});
+assert.deepEqual(slow.sales,gradual.sales);assert.deepEqual(slow.inventoryPeaks,gradual.inventoryPeaks);
+// Grouped instructions need no loop picker and preserve source-before-consumer
+// setup ordering even when regular and occasional recipes are combined.
 const src=fs.readFileSync('web/app.js','utf8'),ctx=vm.createContext({items,fmt:n=>Math.floor(n).toLocaleString('en-US'),esc:String,itemName:id=>id,craftworksDisplayOrder:ids=>ids});
-vm.runInContext(src.slice(src.indexOf('function routeBatchTiming('),src.indexOf("$('routeCards').onclick=")),ctx);
-ctx.small=small;ctx.periodic=periodic;ctx.batch=batch;
-assert.match(vm.runInContext('craftworksSetup(null,small)',ctx),/Final loop only/);
+vm.runInContext(src.slice(src.indexOf('function routeFrequencyLabel('),src.indexOf("$('routeCards').onclick=")),ctx);
+ctx.small=small;ctx.periodic=periodic;ctx.batch=batch;ctx.gradual=gradual;
+assert.match(vm.runInContext('craftworksSetup(null,small)',ctx),/At the end/);
 assert.match(vm.runInContext('craftworksSetup(null,periodic)',ctx),/Every 2 loops/);
-assert.match(vm.runInContext("routeSaleRows(periodic,'woods',1)",ctx),/No selling needed/);
-assert.match(vm.runInContext("routeSaleRows(periodic,'woods',2)",ctx),/20/);
+assert.match(vm.runInContext("routeSellSection(gradual,'woods')",ctx),/Every 50 loops/);
 assert.match(vm.runInContext('routeTransition(periodic,periodic.parts[0],0)',ctx),/Sell these items/);
 assert.match(vm.runInContext('craftworksSetup(null,batch)',ctx),/Sell these items/);
-// A periodic intermediate must precede its regular consumer on the loops
-// when both run. Pack the filtered dependency order, never cadence order.
-ctx.cross={recipes:['board','goal'],runs:{'required:board':{2:20},'required:goal':{1:5,2:5}}};ctx.loop={slots:1};
-assert.equal(vm.runInContext("JSON.stringify(routeStopBatches(cross,loop,2).map(b=>b.ids))",ctx),JSON.stringify([['board'],['goal']]));
-assert.equal(vm.runInContext("JSON.stringify(routeStopBatches(cross,loop,1).map(b=>b.ids))",ctx),JSON.stringify([['goal']]));
+assert.match(vm.runInContext('craftworksSetup(null,batch)',ctx),/sell between them/);
+assert.doesNotMatch(vm.runInContext('craftworksSetup(null,gradual)',ctx),/Show loop|type="number"|data-sale-loop|data-craft-loop/);
+ctx.cross={recipes:['board','goal'],runs:{'required:board':{2:20},'required:goal':{1:5,2:5}}};ctx.loop={slots:1,rounds:2,craftCadence:{board:2}};
+assert.equal(vm.runInContext("JSON.stringify(routeCraftRoutines(cross,loop)[1].batches.map(b=>b.ids))",ctx),JSON.stringify([['board'],['goal']]));
+assert.equal(vm.runInContext("JSON.stringify(routeCraftRoutines(cross,loop)[0].batches.map(b=>b.ids))",ctx),JSON.stringify([['goal']]));
 assert.match(vm.runInContext('routeTransition(periodic,periodic.parts[0],0)',ctx),/data-craft-stop="woods"/);
-console.log('Sales and cadence: final/periodic batches, ingredient protection, primary delivery, multi-batch selling, mixed sources and route UI passed.');
+// All displayed routines together account for every recorded craft, without
+// duplicating primary or periodic batches across routine alternatives.
+ctx.conserve=periodic;
+assert.ok(vm.runInContext(`conserve.craftStops.every(stop=>{
+ const routines=routeCraftRoutines(stop,conserve);
+ return Object.entries(stop.runs).every(([key,runs])=>{const [kind,id]=key.split(':');const reported=routines.reduce((total,r)=>total+r.batches.filter(b=>b.kind===kind&&b.ids.includes(id)).reduce((n,b)=>n+b.amounts[id]*r.rounds.length,0),0);return Math.abs(reported-Object.values(runs).reduce((a,b)=>a+b,0))<1e-7;});
+})`,ctx));
+console.log('Sales and cadence: final/periodic crafts, independent selling intervals, conservation, ordering, grouped UI and no loop selectors passed.');
