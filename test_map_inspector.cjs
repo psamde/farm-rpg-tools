@@ -12,8 +12,8 @@ const plan={areas:[{location_id:'desert',name:'Jundland Desert',explores:100,ite
 const graph=model.buildCraftMap(items,plan,settings);
 const control=graph.nodes.find(n=>n.id==='control');
 assert.equal(control.requiredUse,6);
-assert.equal(model.craftMapNodeLabels(control,graph.nodes,graph.links).mode,'Use required + Void/Sell');
-assert.equal(model.craftMapNodeLabels({...control,requiredUse:0},graph.nodes,graph.links).mode,'Void/Sell');
+assert.equal(model.craftMapNodeLabels(control,graph.nodes,graph.links).mode,'Use required + Sell');
+assert.equal(model.craftMapNodeLabels({...control,requiredUse:0},graph.nodes,graph.links).mode,'Sell');
 const bonus=model.buildCraftMap(items,plan,{...settings,resource_saver:50});
 assert.equal(bonus.nodes.find(n=>n.id==='control').requiredUse,4,'protected use accounts for Resource Saver');
 const connections=model.craftMapConnections('plate',graph.nodes,graph.links);
@@ -34,7 +34,7 @@ vm.runInContext(`mapGraph=fixture;mapRender=()=>{};mapCraftAddOptions=()=>({all:
 (async()=>{
  vm.runInContext("mapSelect('control')",ctx);
  assert.match(el('mapInspector').innerHTML,/6 reserved for your goals/);
- assert.match(el('mapInspector').innerHTML,/Void\/Sell surplus/);
+ assert.match(el('mapInspector').innerHTML,/Sell surplus/);
  assert.match(el('mapInspector').innerHTML,/data-map-jump="plate"/);
  assert.match(el('mapInspector').innerHTML,/data-map-jump="switch"/);
  assert.match(el('mapInspector').innerHTML,/class="map-connection-grid"/);

@@ -331,12 +331,17 @@ function renderRoute(){if(!result||$('resultContent').classList.contains('stale'
 
  $('routeCards').innerHTML=r.parts.map((a,i)=>{const groupIndex=r.activeGroups.findIndex(g=>g.start<=i&&g.end>=i),group=r.activeGroups[groupIndex];const loc=catalog.locations.find(l=>l.id===a.id);return `${i===group.start?`<section class="routegroup"><button class="routegroupbadge" type="button" data-craft-stop="group-${groupIndex}" title="${group.recipes.length?'Keep this Craftworks setup across the outlined locations':'Needed ingredients can wait until later; surplus may overflow'}" aria-label="${group.recipes.length?'Open active Craftworks setup':'Open crafting instructions after collecting'}">${group.recipes.length?'⚒ <span>Active setup</span>':'<span>Collect first · craft later</span>'}</button><div class="routegroupcards">`:""}<article class="routecard">${loc.image?`<img class="gameicon" src="${esc(loc.image)}" width="48" height="48" alt="" loading="lazy">`:'<span class="areaicon" aria-hidden="true">⌖</span>'}<small>STOP ${i+1}</small><strong>${esc(a.name)}</strong><b>${fmt(a.batch*a.perDrink)}</b><small>expected explores per loop</small><p><strong>${fmt(a.batch)} ${drink}</strong> each visit</p><small>${fmt(a.batch/r.drinksPerClick)} clicks${r.method==='Cider'?` · ${fmt(Math.ceil(a.batch*a.staminaPerDrink))} stamina`:''}</small><small>${fmt(a.explores)} explores in the original plan</small></article>${i===group.end?"</div></section>":""}${routeTransition(r,a,i)}`;}).join('')||'<p>No exploration needed.</p>';
 
- $('routeStatus').textContent=r.problem?`Loop estimate — inventory verification incomplete: ${r.problem}`:r.parts.length?`Repeat this circuit ${fmt(r.rounds)} ${r.rounds===1?'time':'times'}. ${fmt(r.uses)} ${drink} total${r.method==='Cider'?` + ${fmt(Math.ceil(r.stamina))} stamina`:''} · ≈ ${fmt(r.extraExplores)} extra explores from repeatable whole-drink batches. All planned crafts and targets checked against your ${fmt(r.capacity)} inventory limit. Unused surplus may overflow.`:state.planner_mode==='passive'?'No exploration needed. Craft from this production batch.':(!Object.keys(activeTargets()).length&&!p.crafts_in_dependency_order.length&&!p.secondary?.crafts_in_dependency_order?.length?'All primary targets are provided. No exploration or crafting needed.':'No exploration needed. Craft from starting inventory.');
+ $('routeStatus').textContent=r.problem?`Loop estimate — inventory verification incomplete: ${r.problem}`:r.parts.length?`Repeat this circuit ${fmt(r.rounds)} ${r.rounds===1?'time':'times'}. ${fmt(r.uses)} ${drink} total${r.method==='Cider'?` + ${fmt(Math.ceil(r.stamina))} stamina`:''} · ≈ ${fmt(r.extraExplores)} extra explores from repeatable whole-drink batches. All planned crafts and targets checked against your ${fmt(r.capacity)} inventory limit. Unused exploration drops may overflow. Sell crafted surplus at the marked stops.`:state.planner_mode==='passive'?'No exploration needed. Craft from this production batch.':(!Object.keys(activeTargets()).length&&!p.crafts_in_dependency_order.length&&!p.secondary?.crafts_in_dependency_order?.length?'All primary targets are provided. No exploration or crafting needed.':'No exploration needed. Craft from starting inventory.');
 
 
  renderSurplusOverflow(r);
  renderNonCraftingDrops(result.plans[selected]);
  $('craftworksSetup').innerHTML=craftworksSetup(result.plans[selected],r);
+ $('craftworksSetup').onchange=e=>{
+  const input=e.target;if(!input.matches('[data-sale-loop],[data-craft-loop]')||!input.reportValidity())return;
+  if(input.dataset.saleLoop!==undefined)input.closest('details').querySelector('.route-sale-rows').innerHTML=routeSaleRows(r,input.dataset.saleLoop,Number(input.value));
+  else{const stop=r.craftStops.find(s=>s.id===input.dataset.craftLoop);input.closest('details').querySelector('.route-craft-rows').innerHTML=routeCraftStopRows(stop,r,Number(input.value));}
+ };
 
 
 
@@ -356,28 +361,60 @@ function renderSurplusOverflow(loop){
  box.innerHTML=box.hidden?'':surplusOverflowReport(loop);
 }
 
+function routeBatchTiming(schedule,loop){
+ if(schedule.every>=loop.rounds&&loop.rounds>1)return 'Final loop only';
+ if(schedule.every>1)return `Every ${fmt(schedule.every)} loops${loop.rounds%schedule.every?' + final loop':''}`;
+ return 'Each loop';
+}
+// Filter the current loop first, then pack dependency-ordered recipes into
+// slots. Grouping recipes by frequency would put some consumers before inputs.
+function routeStopBatches(stop,loop,round){
+ const batches=[];
+ for(const kind of ['required','optional']){
+  const refs=stop.recipes.filter(id=>(stop.runs[kind+':'+id]?.[round]||0)>0);
+  for(let i=0;i<refs.length;i+=loop.slots)batches.push({kind,ids:refs.slice(i,i+loop.slots)});
+ }
+ return batches;
+}
+function routeCraftStopRows(stop,loop,round){
+ return routeStopBatches(stop,loop,round).map((batch,i)=>`<h4>Setup ${i+1} &middot; ${batch.kind==='required'?'Required crafts':'Optional leftovers'} &middot; ${batch.ids.length} / ${loop.slots} slots</h4><div class="craftworkstable"><table><thead><tr><th>Recipe</th><th>Crafts this loop &asymp;</th></tr></thead><tbody>${[...batch.ids].reverse().map(id=>`<tr><td>${itemName(id,items[id]?.name||id)}</td><td>${fmt(stop.runs[batch.kind+':'+id][round])}</td></tr>`).join('')}</tbody></table></div>`).join('')||'<p class="hint">No additional crafting at this stop on this loop.</p>';
+}
+function routeOccasionalCrafts(stop,loop){
+ const refs=stop.recipes.filter(id=>loop.craftCadence?.[id]>1);if(!refs.length)return '';
+ return `<details class="route-occasional"><summary>Occasional crafts &middot; ${refs.length} recipes</summary><p class="hint">These replace their tiny batches each loop. Select the loop number below to see the complete setup in the right order.</p>${[...new Set(refs.map(id=>loop.craftCadence[id]))].sort((a,b)=>a-b).map(every=>`<p class="craftworks-cadence">${routeBatchTiming({every},loop)}</p><div class="route-occasional-items">${refs.filter(id=>loop.craftCadence[id]===every).map(id=>itemName(id,items[id]?.name||id)).join('')}</div>`).join('')}</details>`;
+}
+function routeSaleRows(loop,place,round){
+ const events=(loop.sales||[]).filter(s=>s.place===place&&s.round===round);
+ return events.map((event,i)=>`${events.length>1?`<p class="hint">Sale ${i+1} &middot; before continuing this crafting batch</p>`:''}<div class="craftworkstable"><table><thead><tr><th>Item</th><th>Sell &asymp;</th><th>Keep for crafts</th></tr></thead><tbody>${event.items.map(row=>`<tr><td>${itemName(row.id,items[row.id]?.name||row.id)}</td><td>${fmt(row.quantity)}</td><td>${fmt(Math.ceil(row.keep))}</td></tr>`).join('')}</tbody></table></div>`).join('')||'<p class="hint">No selling needed this loop.</p>';
+}
+function routeSellSection(loop,place){
+ const events=(loop.sales||[]).filter(s=>s.place===place);if(!events.length)return '';
+ const when=place==='finish'?'After final crafting':place==='start'?'Before exploring':`After ${loop.parts.find(p=>p.id===place)?.name||'crafting'}`;
+ const first=events[0].round;
+ return `<details id="craft-stop-sell-${esc(place)}" class="craftworksset route-sell"><summary>Sell these items &middot; ${esc(when)}</summary><p class="hint">After crafting, set aside or hand in your goal items. Sell only the listed surplus; keep the remaining ingredients. If a final batch fills a stack, sell its surplus before continuing.</p><label class="route-sale-loop">Show loop <input type="number" min="1" max="${loop.rounds}" step="1" value="${first}" data-sale-loop="${esc(place)}"> of ${fmt(loop.rounds)}</label><div class="route-sale-rows">${routeSaleRows(loop,place,first)}</div></details>`;
+}
+
 function craftworksSetup(plan,loop){
- const timing=stop=>{
-  if(stop.once||stop.runCount===loop.rounds)return '';
-  return stop.runCount===stop.lastRound-stop.firstRound+1?` Needed on ${stop.runCount===1?'loop '+fmt(stop.firstRound):'loops '+fmt(stop.firstRound)+'–'+fmt(stop.lastRound)}.`:` Needed on ${fmt(stop.runCount)} of ${fmt(loop.rounds)} loops, when ingredients are available.`;
+ const checkpoint=stop=>{
+  const round=stop.once?(stop.id==='finish'?loop.rounds:stop.firstRound):1;
+  return `<details id="craft-stop-${stop.id}" class="craftworksset"><summary>${esc(stop.name)} &middot; Craftworks</summary><p class="hint">Run these setups in order. Required crafts come first; finished recipes stay above their ingredients within each setup.</p>${routeOccasionalCrafts(stop,loop)}${!stop.once&&loop.rounds>1?`<label class="route-sale-loop">Show loop <input type="number" min="1" max="${loop.rounds}" step="1" value="${round}" data-craft-loop="${esc(stop.id)}"> of ${fmt(loop.rounds)}</label>`:''}<div class="route-craft-rows">${routeCraftStopRows(stop,loop,round)}</div></details>`;
  };
- const checkpoint=stop=>`<details id="craft-stop-${stop.id}" class="craftworksset"><summary>${esc(stop.name)} · ${stop.sets.length} ${stop.sets.length===1?'setup':'setups'}</summary><p class="hint">Run these setups in order. Finish required crafts before optional leftovers; keep outputs needed later.${timing(stop)}</p>${stop.sets.map((ids,i)=>`<h4>Setup ${i+1} · ${stop.setPhases[i]==='required'?'Required crafts':'Optional leftovers'} · ${ids.length} / ${loop.slots} slots</h4><div class="craftworkstable"><table><thead><tr><th>Recipe</th><th>${stop.id==='start'?'Before starting':stop.id==='finish'?'Final crafts':'Additional crafts per loop'} ≈</th></tr></thead><tbody>${[...ids].reverse().map(id=>`<tr><td>${itemName(id,items[id]?.name||id)}</td><td>${stop.setAmounts[i][id]<1?'&lt;1':fmt(stop.setAmounts[i][id])}</td></tr>`).join('')}</tbody></table></div>`).join('')}</details>`;
  const start=loop.craftStops.find(s=>s.id==='start'),finish=loop.craftStops.find(s=>s.id==='finish');
- const sections=(start?checkpoint(start):'')+(loop.activeGroups||[]).map((group,i)=>{
+ const sections=(start?checkpoint(start):'')+routeSellSection(loop,'start')+(loop.activeGroups||[]).map((group,i)=>{
  const after=loop.craftStops.find(s=>s.id===loop.parts[group.end].id);
- return `<details id="craft-stop-group-${i}" class="craftworksset"><summary>${group.recipes.length?'Keep active':'Collect'}: ${esc(group.from)}${group.from===group.to?'':' → '+esc(group.to)}${group.recipes.length?' · '+group.recipes.length+' / '+loop.slots+' slots':' · craft later'}</summary><p class="hint">${group.recipes.length?'These recipes preserve ingredients needed by later crafts. Required recipes come first; finished items stay above their ingredients.':'No active Craftworks needed here. Keep the collected ingredients for the later setups.'}</p>${group.recipes.length?`<div class="craftworkstable"><table><thead><tr><th>Recipe</th><th>Crafts per loop ≈</th></tr></thead><tbody>${craftworksDisplayOrder(group.recipes,loop.requiredRecipes).map(id=>`<tr><td>${itemName(id,items[id]?.name||id)}</td><td>${(group.amounts?.[id]||0)<1?'&lt;1':fmt(group.amounts[id])}</td></tr>`).join('')}</tbody></table></div>`:''}</details>`+(after?checkpoint(after):'');
- }).join('')+(finish?checkpoint(finish):'');
- return `<div class="sectiontitle"><h3>Craftworks by location</h3></div><p class="hint">Craft later when the needed ingredients fit. Early setups keep enough material for your crafts; unused surplus can overflow.</p>${sections||'<p class="hint">No crafting needed.</p>'}<p class="hint">Amounts are averages per loop; final cleanup is separate. Keep the listed quantities for your goals. These are planned quantities, not automatic Craftworks limits—stop completed recipes. Tick and swap times are not modeled.</p>`;
+ return `<details id="craft-stop-group-${i}" class="craftworksset"><summary>${group.recipes.length?'Keep active':'Collect'}: ${esc(group.from)}${group.from===group.to?'':' → '+esc(group.to)}${group.recipes.length?' · '+group.recipes.length+' / '+loop.slots+' slots':' · craft later'}</summary><p class="hint">${group.recipes.length?'These recipes preserve ingredients needed by later crafts. Required recipes come first; finished items stay above their ingredients.':'No active Craftworks needed here. Keep the collected ingredients for the later setups.'}</p>${group.recipes.length?`<div class="craftworkstable"><table><thead><tr><th>Recipe</th><th>Crafts per loop ≈</th></tr></thead><tbody>${craftworksDisplayOrder(group.recipes,loop.requiredRecipes).map(id=>`<tr><td>${itemName(id,items[id]?.name||id)}</td><td>${(group.amounts?.[id]||0)<1?'&lt;1':fmt(group.amounts[id])}</td></tr>`).join('')}</tbody></table></div>`:''}</details>`+(after?checkpoint(after):'')+routeSellSection(loop,loop.parts[group.end].id);
+ }).join('')+(finish?checkpoint(finish):'')+routeSellSection(loop,'finish');
+ return `<div class="sectiontitle"><h3>Craftworks &amp; selling by location</h3></div><p class="hint">Small batches wait until the final loop where inventory allows. Other batches show how often to run them. Exploration surplus may overflow; crafted surplus has a selling stop.</p>${sections||'<p class="hint">No crafting needed.</p>'}<p class="hint">Batch counts are estimates; the final batch may be smaller. Keep the listed quantities for your goals. These are planned quantities, not automatic Craftworks limits—stop completed recipes. Tick and swap times are not modeled.</p>`;
 }
 
 
-function routeTransition(loop,area,index){const stop=!loop.continuous&&loop.craftStops.find(s=>s.id===area.id),last=index===loop.parts.length-1;
- const nextIndex=!loop.continuous?(loop.activeGroups||[]).findIndex(g=>g.start===index+1):-1;
+function routeTransition(loop,area,index){const sell=(loop.sales||[]).some(s=>s.place===area.id);const stop=loop.craftStops.find(s=>s.id===area.id),last=index===loop.parts.length-1;
+ const nextIndex=(loop.activeGroups||[]).findIndex(g=>g.start===index+1);
  const current=loop.activeGroups?.find(g=>g.start<=index&&g.end>=index);
  const candidate=nextIndex>=0?loop.activeGroups[nextIndex]:null;
  const next=candidate&&(candidate.recipes.length||current?.recipes.length)?candidate:null;
  const label=stop?`After ${area.name}: finish this stretch’s crafting${next?`, then ${next.recipes.length?'load the next setup':'pause Craftworks'}`:''}. Open setup.`:next?next.recipes.length?`Change Craftworks for ${next.from} through ${next.to}. Open setup.`:'Pause Craftworks for this collecting stretch. Open instructions.':'Keep the current setup active';
- return `<div class="routetransition${last?' looptransition':''}" title="${esc(label)}${last?' Empty surplus and repeat loop.':''}"><span aria-hidden="true">${last?'↻':'→'}</span>${stop||next?`<button type="button" data-craft-stop="${stop?esc(area.id):'group-'+nextIndex}" aria-label="${esc(label)}"><span aria-hidden="true">⚒</span><small>${stop?stop.sets.length:next?.recipes.length?1:'Pause'}</small></button>`:''}${last?'<span class="sr">Empty surplus. Repeat loop.</span>':''}</div>`;}
+ return `<div class="routetransition${last?' looptransition':''}" title="${esc(label)}${last?' Sell listed surplus and repeat loop.':''}"><span aria-hidden="true">${last?'↻':'→'}</span>${stop||next?`<button type="button" data-craft-stop="${stop?esc(area.id):'group-'+nextIndex}" aria-label="${esc(label)}"><span aria-hidden="true">⚒</span><small>${stop?routeStopBatches(stop,loop,1).length+(Object.values(loop.craftCadence||{}).some(n=>n>1)?'+':''):next?.recipes.length?1:'Pause'}</small></button>`:''}${sell?`<button class="route-sell-button" type="button" data-craft-stop="sell-${esc(area.id)}">Sell these items</button>`:''}${last?'<span class="sr">Repeat loop.</span>':''}</div>`;}
 
 $('routeCards').onclick=e=>{const b=e.target.closest('[data-craft-stop]');if(!b)return;const panel=document.getElementById('craft-stop-'+b.dataset.craftStop);if(panel){$('craftworksDisclosure').open=true;panel.open=true;panel.scrollIntoView({behavior:'smooth',block:'center'});}};
 

@@ -14,7 +14,7 @@ function simulateInventoryRoute(plan, items, locations, settings){
  const factor=1/(1+Number(plan.assumptions.resource_saver||0)/100),free=new Set(plan.assumptions.unlimited_free_items.map(r=>r.id));
  // Incoming supplies are a finite reserve outside the loop's inventory cap.
  // Only drops and items crafted in the loop occupy its limited inventory.
- const stock={},incoming={},remaining={},requiredRemaining={},optionalRemaining={},order=[],seen=new Set();
+ const stock={},craftedStock={},incoming={},remaining={},requiredRemaining={},optionalRemaining={},order=[],seen=new Set();
  for(const b of plan.item_balances)incoming[b.item_id]=b.starting_inventory+(b.auto_starting_inventory===undefined?(b.required_external_supply||0):0);
  const available=id=>(incoming[id]||0)+(stock[id]||0);
  for(const [rows,pool] of [[plan.crafts_in_dependency_order,requiredRemaining],[plan.secondary?.crafts_in_dependency_order||[],optionalRemaining]])for(const c of rows)if(c.crafts>0){pool[c.item_id]=(pool[c.item_id]||0)+c.crafts;remaining[c.item_id]=(remaining[c.item_id]||0)+c.crafts;}
@@ -39,7 +39,7 @@ function simulateInventoryRoute(plan, items, locations, settings){
  const slots=Number(settings.craftworks_slots??10);
  if(!Number.isInteger(slots)||slots<1||slots>100)throw Error('Craftworks slots must be a whole number from 1 to 100.');
  const priorityStages=contestedOptional.size>0;
- const continuous=slots>=order.length&&!priorityStages, stopWork=new Map(),stopPhases=new Map(),stopRounds=new Map(),activeWork={},groupWork={},unsafeMerges=new Map();
+ const continuous=slots>=order.length&&!priorityStages, stopWork=new Map(),stopPhases=new Map(),stopRounds=new Map(),stopRuns=new Map(),activeWork={},groupWork={},unsafeMerges=new Map();
  let recording=null,currentPlace='start',currentIndex=-1,currentGroup=null;
  const setups=[];for(let i=0;i<order.length;i+=slots)setups.push(order.slice(i,i+slots));
  const menuRank=id=>{const i=explorationMenuOrder.indexOf(id);return i<0?explorationMenuOrder.length:i;};
@@ -129,18 +129,21 @@ function simulateInventoryRoute(plan, items, locations, settings){
  const visitRecipes=parts.map((_,i)=>activeGroups.find(g=>i>=g.start&&i<=g.end).recipes);
  const stopPlaces=new Set(activeGroups.map(g=>g.end));
  for(const p of parts)p.dropRates=Object.fromEntries(p.drops.map(d=>[d.id,d.q]));
- const visits=[],empties=[];let uses=0,crafts=0,round=1,problem=null,failure=null,verificationSteps=0;
+ const visits=[],empties=[],sales=[];let uses=0,crafts=0,round=1,problem=null,failure=null,verificationSteps=0;
  const requiredAllowance={},optionalAllowance={},delivered={},needed={},future={};
  let requiredHoldsCache=null,checkpointPlace=-1;
  const targetHeld=id=>Math.max(0,(targetReserves[id]||0)*Math.min(round,rounds)/rounds-(delivered[id]||0));
  const spendable=id=>Math.max(0,available(id)-targetHeld(id));
  for(const id of order){for(const [child,q] of recipes[id].ingredients)needed[child]=(needed[child]||0)+remaining[id]*q;future[id]=(future[id]||0)+remaining[id]*recipes[id].out;}
  for(const p of parts)for(const d of p.drops)future[d.id]=(future[d.id]||0)+p.left*d.q;
+ const cadence=settings._craftCadence||{};
+ function craftCutoff(id){const every=cadence[id]||1;return round>=rounds?rounds:round%every===0?round:0;}
+ function consumeStock(id,quantity){stock[id]=Math.max(0,(stock[id]||0)-quantity);craftedStock[id]=Math.max(0,(craftedStock[id]||0)-quantity);}
  function allowRound(){
   requiredHoldsCache=null;
   for(const id of order){
-   requiredAllowance[id]=Math.max(0,Math.min(requiredRemaining[id]||0,Math.ceil((requiredTotals[id]||0)*Math.min(round,rounds)/rounds)-((requiredTotals[id]||0)-(requiredRemaining[id]||0))));
-   optionalAllowance[id]=Math.max(0,Math.min(optionalRemaining[id]||0,Math.ceil((optionalTotals[id]||0)*Math.min(round,rounds)/rounds)-((optionalTotals[id]||0)-(optionalRemaining[id]||0))));
+   requiredAllowance[id]=Math.max(0,Math.min(requiredRemaining[id]||0,Math.ceil((requiredTotals[id]||0)*craftCutoff(id)/rounds)-((requiredTotals[id]||0)-(requiredRemaining[id]||0))));
+   optionalAllowance[id]=Math.max(0,Math.min(optionalRemaining[id]||0,Math.ceil((optionalTotals[id]||0)*craftCutoff(id)/rounds)-((optionalTotals[id]||0)-(optionalRemaining[id]||0))));
   }
  }
  allowRound();
@@ -181,9 +184,9 @@ function simulateInventoryRoute(plan, items, locations, settings){
    if(count<=0)return;
    for(const [child,q] of ingredients){
     const used=count*q,provided=Math.min(incoming[child]||0,used);
-    incoming[child]=(incoming[child]||0)-provided;stock[child]=Math.max(0,(stock[child]||0)-(used-provided));needed[child]-=used;
+    incoming[child]=(incoming[child]||0)-provided;consumeStock(child,used-provided);needed[child]-=used;
    }
-   if(!free.has(id))stock[id]=(stock[id]||0)+count*out;
+   if(!free.has(id)){stock[id]=(stock[id]||0)+count*out;craftedStock[id]=(craftedStock[id]||0)+count*out;}
    remaining[id]-=count;pending[id]-=count;quota[id]-=count;future[id]-=count*out;crafts+=count;checkStock(id);
    if(kind==='required')requiredHoldsCache=null;
    if(settings._trace)settings._trace({type:'craft',round,place:recording||currentPlace,id,kind,count,held:kind==='optional'?{...requiredHolds()}:null});
@@ -194,6 +197,8 @@ function simulateInventoryRoute(plan, items, locations, settings){
     const work=stopWork.get(recording);work[id]=(work[id]||0)+count;
     if(!stopPhases.has(recording))stopPhases.set(recording,{required:{},optional:{}});
     const phase=stopPhases.get(recording)[kind];phase[id]=(phase[id]||0)+count;
+    if(!stopRuns.has(recording))stopRuns.set(recording,{});
+    const runs=stopRuns.get(recording),key=kind+':'+id,byRound=runs[key]||(runs[key]={}),at=Math.min(round,rounds);byRound[at]=(byRound[at]||0)+count;
    }else{activeWork[id]=(activeWork[id]||0)+count;if(currentGroup){const work=groupWork[currentGroup.start]||(groupWork[currentGroup.start]={});work[id]=(work[id]||0)+count;}}
   }
   // Simulate ingredient production in dependency order, completing all payable
@@ -211,12 +216,24 @@ function simulateInventoryRoute(plan, items, locations, settings){
   requiredHoldsCache=null;
   for(const id of Object.keys(targetReserves)){
    const amount=Math.min(available(id),targetHeld(id)),provided=Math.min(incoming[id]||0,amount);
-   incoming[id]=(incoming[id]||0)-provided;stock[id]=Math.max(0,(stock[id]||0)-(amount-provided));delivered[id]=(delivered[id]||0)+amount;
+   incoming[id]=(incoming[id]||0)-provided;consumeStock(id,amount-provided);delivered[id]=(delivered[id]||0)+amount;
   }
  }
  function clearFinished(){if(problem)return false;
   deliverTargets();
-  const cleared=[];for(const [id,n] of Object.entries(stock)){const keep=Math.max(0,(needed[id]||0)+(targetReserves[id]||0)-(delivered[id]||0)-(future[id]||0)-(incoming[id]||0));const quantity=Math.floor(n-keep+1e-8);if(quantity>0){cleared.push({id,quantity});stock[id]=n-quantity;}}
+  const cleared=[],sold=[];
+  for(const [id,n] of Object.entries(stock)){
+   const keep=Math.max(0,(needed[id]||0)+(targetReserves[id]||0)-(delivered[id]||0)-(future[id]||0)-(incoming[id]||0));
+   const quantity=Math.floor(n-keep+1e-8);if(quantity<=0)continue;
+   // Drops can be discarded. Manufactured stock leaves inventory only through
+   // an explicit sale, never through exploration overflow or an invisible empty.
+   const crafted=Math.min(quantity,craftedStock[id]||0);
+   cleared.push({id,quantity});consumeStock(id,quantity);
+   // Mixed-source stacks need the entire cleared surplus sold too: leaving
+   // collected copies behind would invalidate space reserved for future crafts.
+   if((produced[id]||0)>0)sold.push({id,quantity,craftedQuantity:crafted,keep:stock[id]||0});
+  }
+  if(sold.length)sales.push({round:Math.min(round,rounds),place:round>rounds?'finish':currentPlace,after:uses,items:sold});
   if(cleared.length){empties.push({after:uses,items:cleared});return true;}return false;
  }
  function nextCraftClick(p,ids){
@@ -260,13 +277,14 @@ function simulateInventoryRoute(plan, items, locations, settings){
    if(!continuous&&stopPlaces.has(placeIndex))atStop(p.id);
    if(settings._traceInventory)settings._traceInventory({round,place:p.id,stock:{...stock},incoming:{...incoming},remaining:{...remaining}});
   }
-  clearFinished();atStop(parts.at(-1)?.id||'start');
+  clearFinished();atStop(parts.at(-1)?.id||'start');clearFinished();
  }
  // Empty completed stacks when needed to finish the remaining crafts.
  if(!problem){allowRound();let previous=-1;while(Object.values(remaining).some(n=>n)&&previous!==crafts){previous=crafts;clearFinished();atStop('finish');}
   if(Object.values(remaining).some(n=>n)){const unfinished=Object.keys(remaining).filter(id=>remaining[id]>0);failure={kind:'craft_shortfall',items:unfinished,remaining:{...remaining}};problem='These visits cannot finish every planned craft: '+unfinished.slice(0,4).map(id=>items[id]?.name||id).join(', ')+'. Needed ingredients must fit before crafting.';}
  }
  if(!problem){deliverTargets();if(Object.entries(targetReserves).some(([id,q])=>(delivered[id]||0)+1e-6<q)){failure={kind:'target_shortfall',items:Object.keys(targetReserves).filter(id=>(delivered[id]||0)+1e-6<targetReserves[id])};problem='The route does not preserve every required target output.';}}
+ if(!problem)clearFinished();
  if(!problem&&!settings._rounds&&rounds>1){
   let best=simulateInventoryRoute(plan,items,locations,{...settings,_rounds:rounds}),low=1,high=rounds-1;
   // A bounded search for larger batches; this is a heuristic, not a global optimum.
@@ -284,11 +302,14 @@ function simulateInventoryRoute(plan, items, locations, settings){
   const atRounds=[...stopRounds.get(id)],recipes=order.filter(ref=>work[ref]>0),sets=[],setPhases=[],setAmounts=[],once=id==='start'||id==='finish';
   for(const kind of ['required','optional']){
    const amounts=stopPhases.get(id)[kind],refs=order.filter(ref=>amounts[ref]>0);
-   for(let i=0;i<refs.length;i+=slots){const group=refs.slice(i,i+slots);sets.push(group);setPhases.push(kind);setAmounts.push(Object.fromEntries(group.map(ref=>[ref,amounts[ref]/(once?1:rounds)])));}
+   for(let i=0;i<refs.length;i+=slots){
+    const group=refs.slice(i,i+slots);
+    sets.push(group);setPhases.push(kind);setAmounts.push(Object.fromEntries(group.map(ref=>[ref,amounts[ref]/(once?1:rounds)])));
+   }
   }
-  return {id,name:id==='start'?'Before the first location':id==='finish'?'After the final loop':`After ${parts.find(p=>p.id===id)?.name||'the final location'}`,once,firstRound:atRounds[0],lastRound:atRounds.at(-1),runCount:atRounds.length,recipes,sets,setPhases,setAmounts,amounts:Object.fromEntries(recipes.map(ref=>[ref,work[ref]/(once?1:rounds)]))};
+  return {id,name:id==='start'?'Before the first location':id==='finish'?'After the final loop':`After ${parts.find(p=>p.id===id)?.name||'the final location'}`,once,firstRound:atRounds[0],lastRound:atRounds.at(-1),runCount:atRounds.length,runs:stopRuns.get(id),recipes,sets,setPhases,setAmounts,amounts:Object.fromEntries(recipes.map(ref=>[ref,work[ref]/(once?1:rounds)]))};
  });
- return {requiredExploreSupply,dropTotals,overflow:lost,overflowByLocation:lostByLocation,surplusOverflow:Object.entries(lost).filter(([,q])=>q>1e-7).map(([id,quantity])=>({id,quantity,percent:100*quantity/dropTotals[id],expectedDrops:dropTotals[id]})).sort((a,b)=>b.quantity-a.quantity),failure,deferredStops:settings._deferredStops||{},unsafeMerges:[...unsafeMerges.values()],priorityStages,releasePlace,requiredRecipes:[...requiredIds],contestedOptional:[...contestedOptional],deliveredTargets:delivered,capacity,inventoryPeaks,verificationSteps,inventoryVerified:!problem,method,drinksPerClick,activeWork,stamina:parts.reduce((n,p)=>n+p.scheduled*p.staminaPerDrink,0),rounds,slots,setups,continuous,interval,activeGroups:activeGroups.map(g=>({...g,amounts:Object.fromEntries(Object.entries(groupWork[g.start]||{}).map(([id,q])=>[id,q/rounds])),from:parts[g.start].name,to:parts[g.end].name,after:g.start?parts[g.start-1].id:null})),craftStops,minimumContinuousSlots:order.length,minimumStopSlots:Math.max(0,...craftStops.map(s=>s.recipes.length)),crafting:order.map(id=>({id,perLoop:totals[id]/rounds,total:totals[id]})),extraExplores:parts.reduce((n,p)=>n+p.scheduled*p.perDrink-p.explores,0),parts:parts.map(p=>({...p,visits:visits.filter(v=>v.id===p.id).length,maxRun:visits.reduce((n,v)=>v.id===p.id?Math.max(n,v.drinks):n,0)})),visits,empties,problem,uses,complete:!problem};
+ return {craftCadence:{...cadence},sales,requiredExploreSupply,dropTotals,overflow:lost,overflowByLocation:lostByLocation,surplusOverflow:Object.entries(lost).filter(([,q])=>q>1e-7).map(([id,quantity])=>({id,quantity,percent:100*quantity/dropTotals[id],expectedDrops:dropTotals[id]})).sort((a,b)=>b.quantity-a.quantity),failure,deferredStops:settings._deferredStops||{},unsafeMerges:[...unsafeMerges.values()],priorityStages,releasePlace,requiredRecipes:[...requiredIds],contestedOptional:[...contestedOptional],deliveredTargets:delivered,capacity,inventoryPeaks,verificationSteps,inventoryVerified:!problem,method,drinksPerClick,activeWork,stamina:parts.reduce((n,p)=>n+p.scheduled*p.staminaPerDrink,0),rounds,slots,setups,continuous,interval,activeGroups:activeGroups.map(g=>({...g,amounts:Object.fromEntries(Object.entries(groupWork[g.start]||{}).map(([id,q])=>[id,q/rounds])),from:parts[g.start].name,to:parts[g.end].name,after:g.start?parts[g.start-1].id:null})),craftStops,minimumContinuousSlots:order.length,minimumStopSlots:Math.max(0,...craftStops.map(s=>s.recipes.length)),crafting:order.map(id=>({id,perLoop:totals[id]/rounds,total:totals[id]})),extraExplores:parts.reduce((n,p)=>n+p.scheduled*p.perDrink-p.explores,0),parts:parts.map(p=>({...p,visits:visits.filter(v=>v.id===p.id).length,maxRun:visits.reduce((n,v)=>v.id===p.id?Math.max(n,v.drinks):n,0)})),visits,empties,problem,uses,complete:!problem};
 }
 // Choose where crafting is necessary, rather than where it first becomes payable.
 // Every accepted schedule is replayed over all loops with the same craft totals.
@@ -370,8 +391,31 @@ function computeInventoryRoute(plan,items,locations,settings){
   // remaining sets so obsolete early recipes do not survive the first pass.
   for(let i=0;i<groups.length;i++)remove(i,[...groups[i].recipes].reverse(),80);
  }
+ // Batch infrequent checkpoint crafts. The largest interval is tried first;
+ // failed replays are split so one storage-heavy recipe cannot prevent other
+ // branches from waiting. No added exploration and no changed craft targets.
+ let cadence={...(settings._craftCadence||{})},cadenceCalls=0;
+ const active=new Set(chosen.groups.flatMap(g=>g.recipes));
+ const totals=Object.fromEntries(best.crafting.map(c=>[c.id,c.total]));
+ const factor=1/(1+Number(plan.assumptions.resource_saver||0)/100);
+ const free=new Set(plan.assumptions.unlimited_free_items.map(i=>i.id));
+ const volume=id=>Math.max(totals[id]*(items[id].output_quantity||1),...Object.entries(items[id].direct_ingredients||{}).filter(([ref])=>!free.has(ref)).map(([,q])=>totals[id]*q*factor));
+ const candidates=ids.filter(id=>!active.has(id)).sort((a,b)=>volume(a)-volume(b));
+ const intervals=[best.rounds,...[100,50,20,10,5,2].filter(n=>n<best.rounds)];
+ function delay(refs,every){
+  if(!refs.length||cadenceCalls>=40)return;
+  const next={...cadence,...Object.fromEntries(refs.map(id=>[id,every]))};cadenceCalls++;
+  const r=simulateInventoryRoute(plan,items,locations,{...quiet,_rounds:best.rounds,_activeGroups:chosen.groups,_checkpointRecipes:chosen.checkpoints,_craftCadence:next,_groupSpan:1});
+  if(valid(r)){best=r;cadence=next;return;}
+  if(refs.length>1){const mid=Math.floor(refs.length/2);delay(refs.slice(0,mid),every);delay(refs.slice(mid),every);}
+ }
+ if(!settings._noCadence&&!settings._craftCadence&&best.rounds>1)for(const every of intervals){
+  // This volume bound selects candidates only. Full shared-stock replay, not
+  // the estimate, decides whether a schedule may be accepted.
+  if(every>1)delay(candidates.filter(id=>!cadence[id]&&volume(id)*every/best.rounds<=best.capacity),every);
+ }
  best.scheduleEffort=effort(best);best.checkpointRecipes=chosen.checkpoints;
- if(settings._trace||settings._traceInventory){const r=simulateInventoryRoute(plan,items,locations,{...settings,_rounds:best.rounds,_activeGroups:chosen.groups,_checkpointRecipes:chosen.checkpoints,_groupSpan:1});r.scheduleEffort=best.scheduleEffort;r.checkpointRecipes=chosen.checkpoints;return r;}
+ if(settings._trace||settings._traceInventory){const r=simulateInventoryRoute(plan,items,locations,{...settings,_rounds:best.rounds,_activeGroups:chosen.groups,_checkpointRecipes:chosen.checkpoints,_craftCadence:cadence,_groupSpan:1});r.scheduleEffort=best.scheduleEffort;r.checkpointRecipes=chosen.checkpoints;return r;}
  return best;
 }
 // UI-only changes must not rerun the complete schedule search. Cache by values,
