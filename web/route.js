@@ -202,8 +202,8 @@ function simulateInventoryRoute(plan, items, locations, settings){
    }else{activeWork[id]=(activeWork[id]||0)+count;if(currentGroup){const work=groupWork[currentGroup.start]||(groupWork[currentGroup.start]={});work[id]=(work[id]||0)+count;}}
   }
   // Simulate ingredient production in dependency order, completing all payable
-  // required crafts before the optional pass. Display order is reversed within
-  // each priority, so finished recipes still sit above their ingredients.
+  // required crafts before the optional pass. One-time setups use this same
+  // input-first order; only continuously active setups reverse display order.
   for(const id of order)if(selectedIds.has(id))run(id,'required',requiredRemaining,requiredAllowance);
   for(const id of order)if(selectedIds.has(id)&&optionalAllowed(id,atCheckpoint))run(id,'optional',optionalRemaining,optionalAllowance);
  }

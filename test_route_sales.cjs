@@ -70,6 +70,16 @@ assert.equal(vm.runInContext("JSON.stringify(routeCraftRoutines(cross,loop)[0].b
 assert.match(vm.runInContext('routeTransition(periodic,periodic.parts[0],0)',ctx),/data-craft-stop="woods"/);
 assert.match(vm.runInContext('routeCraftRoutine(routeCraftRoutines(cross,loop)[1],loop)',ctx),/Also run all earlier groups/);
 assert.match(vm.runInContext('routeCraftRoutine(routeCraftRoutines(cross,loop)[1],loop)',ctx),/Make board before goal/);
+// A one-pass setup must display its crafted ingredients before consumers,
+// both within one setup and when the slot limit splits the chain.
+ctx.ordered={recipes:['board','goal','bonus'],runs:{'required:board':{1:2},'required:goal':{1:1},'optional:bonus':{1:1}}};
+for(const slots of [1,22]){
+ ctx.orderedLoop={slots,rounds:1,craftCadence:{}};
+ const html=vm.runInContext('routeCraftRoutine(routeCraftRoutines(ordered,orderedLoop)[0],orderedLoop)',ctx);
+ assert.ok(html.indexOf('<td>board</td>')<html.indexOf('<td>goal</td>'),'ingredient must appear before the craft using it');
+ assert.ok(html.indexOf('<td>goal</td>')<html.indexOf('<td>bonus</td>'),'required crafts must stay before optional crafts');
+}
+
 ctx.multi={recipes:['wood','board','goal','bonus'],runs:{
  'required:wood':Object.fromEntries(Array.from({length:205},(_,i)=>[i+1,1])),
  'optional:board':{50:50,100:50,150:50,200:50,205:5},
