@@ -36,7 +36,7 @@ def exploration_target_ids(catalog):
 
 def plan(catalog, target, quantity=1, areas=None, exclude_areas=None,
          inventory=None, iron_depot=False, runecube=False, continuous=False,
-         require_all_areas=False, resource_saver=0, suggest_inventory=True):
+         require_all_areas=False, resource_saver=0, suggest_inventory=True, direct_sources=None):
     if isinstance(resource_saver, bool) or not isinstance(resource_saver, (int, float)) or not math.isfinite(resource_saver) or not 0 <= resource_saver <= 45:
         raise ValueError('Resource Saver must be a percentage from 0 to 45')
     # Resource Saver duplicates output; it is NOT a percentage discount.
@@ -60,6 +60,11 @@ def plan(catalog, target, quantity=1, areas=None, exclude_areas=None,
         if not items[ref]['craftable'] and ref not in exploration_target_ids(catalog):
             raise ValueError('Targets must be craftable or directly obtainable from exploration')
         goals[ref] += count
+    direct_sources = {resolve(items,str(ref)): {resolve(catalog['locations'],a) for a in locations}
+                      for ref,locations in (direct_sources or {}).items() if locations}
+    # A mastery target must still be crafted. Source choices replace only
+    # intermediate production, never the user's explicit craft goal.
+    direct_sources = {r:locations for r,locations in direct_sources.items() if r not in goals}
     target_id = next(iter(goals))
     targets = [{'item_id': i, 'name': items[i]['name'], 'craft_quantity': q, 'kind': 'craft' if items[i]['craftable'] else 'collect'} for i, q in goals.items()]
     stock = Counter()
@@ -118,7 +123,7 @@ def plan(catalog, target, quantity=1, areas=None, exclude_areas=None,
     matrix = np.zeros((len(row_ids), nloc + ncraft))
     for r, ref in enumerate(row_ids):
         for col, loc in enumerate(location_ids):
-            matrix[r, col] = rates[loc].get(ref, 0)
+            matrix[r, col] = rates[loc].get(ref, 0) if ref not in direct_sources or loc in direct_sources[ref] else 0
         for col, craft in enumerate(craft_order, nloc):
             matrix[r, col] = (items[craft]['output_quantity'] if craft == ref else 0) - items[craft]['direct_ingredients'].get(ref, 0) * material_factor
     demand = np.array([-stock[ref] for ref in row_ids], dtype=float)
@@ -139,6 +144,8 @@ def plan(catalog, target, quantity=1, areas=None, exclude_areas=None,
     for ref, count in goals.items():
         if items[ref]['craftable']:
             lower[nloc + craft_order.index(ref)] = count
+    for ref in direct_sources:
+        if ref in craft_order: upper[nloc + craft_order.index(ref)] = 0
     objective = np.array([1.] * nloc + [0.] * ncraft)
     integrality = np.zeros(nloc + ncraft) if continuous else np.ones(nloc + ncraft)
     constraint = LinearConstraint(matrix, demand, np.inf)
@@ -289,7 +296,7 @@ def plan(catalog, target, quantity=1, areas=None, exclude_areas=None,
 
 def ranked_plans(catalog, target, quantity=1, areas=None, exclude_areas=None,
                  inventory=None, iron_depot=False, runecube=False, max_areas=None,
-                 progress=None, combinations_mode=False, resource_saver=0):
+                 progress=None, combinations_mode=False, resource_saver=0, direct_sources=None):
     """Find distinct best routes, or enumerate exact area sets when requested.
 
     Areas may receive zero explores. Permutations, zero-use areas, and alternate
@@ -298,7 +305,7 @@ def ranked_plans(catalog, target, quantity=1, areas=None, exclude_areas=None,
     if max_areas is not None and (isinstance(max_areas, bool) or not isinstance(max_areas, int) or max_areas < 1):
         raise ValueError('max_areas must be a positive integer')
     # Validate settings and detect a globally impossible target up front.
-    baseline = plan(catalog, target, quantity, areas, exclude_areas, inventory, iron_depot, runecube, resource_saver=resource_saver)
+    baseline = plan(catalog, target, quantity, areas, exclude_areas, inventory, iron_depot, runecube, resource_saver=resource_saver, direct_sources=direct_sources)
     items = catalog['items']
     target_id = baseline['target']['item_id']
     free_ids = {row['id'] for row in baseline['assumptions']['unlimited_free_items']}
@@ -339,7 +346,7 @@ def ranked_plans(catalog, target, quantity=1, areas=None, exclude_areas=None,
             try:
                 result = baseline if scope == frozenset(candidates) else plan(
                     catalog, target, quantity, sorted(scope), None, inventory,
-                    iron_depot, runecube, resource_saver=resource_saver, suggest_inventory=False)
+                    iron_depot, runecube, resource_saver=resource_saver, suggest_inventory=False, direct_sources=direct_sources)
                 results.append(result)
                 used = {a['location_id'] for a in result['areas'] if a['explores'] > 0}
                 queue.extend(scope - {area} for area in sorted(used))
@@ -352,7 +359,7 @@ def ranked_plans(catalog, target, quantity=1, areas=None, exclude_areas=None,
             for subset in combinations(candidates, size):
                 try:
                     result = plan(catalog, target, quantity, list(subset), None, inventory,
-                                  iron_depot, runecube, require_all_areas=combinations_mode, resource_saver=resource_saver, suggest_inventory=False)
+                                  iron_depot, runecube, require_all_areas=combinations_mode, resource_saver=resource_saver, suggest_inventory=False, direct_sources=direct_sources)
                     results.append(result)
                 except InfeasiblePlan:
                     infeasible += 1

@@ -56,6 +56,7 @@ def target_inventory_savings(catalog, payload, result, deferred=None):
     if not goals or payload.get('planner_mode') == 'passive':
         return
     common = {k: payload[k] for k in ('areas', 'inventory', 'iron_depot', 'runecube', 'resource_saver') if k in payload}
+    common['direct_sources'] = map_direct_sources(catalog,payload)
     key = (id(catalog), json.dumps([goals, common], sort_keys=True))
     cached = _SAVINGS_CACHE.get(key)
     if cached is not None:
@@ -113,6 +114,13 @@ def catalog_with_perks(catalog, payload):
     return boosted
 
 
+def map_direct_sources(catalog, payload):
+    if not payload.get('map_planning'): return {}
+    enabled=set(payload.get('areas') or catalog['locations'])
+    return {r:sorted(set(locations)&enabled) for r,locations in (payload.get('map_sources') or {}).items()
+            if catalog['items'].get(r,{}).get('craftable') and set(locations)&enabled}
+
+
 def compute(catalog, payload, progress=lambda done,total: None, deferred=None):
     global _CACHE_CATALOG
     catalog = catalog_with_perks(catalog, payload)
@@ -125,7 +133,8 @@ def compute(catalog, payload, progress=lambda done,total: None, deferred=None):
         _PRIMARY_CACHE.clear()
         _SAVINGS_CACHE.clear()
         _CACHE_CATALOG = catalog
-    key = json.dumps({k: payload.get(k) for k in ('planner_mode','targets','areas','inventory','iron_depot','runecube','resource_saver','max_areas','combinations_mode')}, sort_keys=True)
+    payload['direct_sources'] = map_direct_sources(catalog,payload)
+    key = json.dumps({k: payload.get(k) for k in ('direct_sources','planner_mode','targets','areas','inventory','iron_depot','runecube','resource_saver','max_areas','combinations_mode')}, sort_keys=True)
     hit = key in _PRIMARY_CACHE
     common = dict(areas=payload['areas'], inventory=payload.get('inventory', {}),
                   iron_depot=payload.get('iron_depot', False), runecube=payload.get('runecube', False),
@@ -138,17 +147,21 @@ def compute(catalog, payload, progress=lambda done,total: None, deferred=None):
             result['production_interval'] = payload.get('production_interval',60)
         else:
             result = ranked_plans(catalog, payload['targets'], max_areas=payload.get('max_areas', 3),
-                                  combinations_mode=payload.get('combinations_mode', False), progress=progress, **common)
+                                  combinations_mode=payload.get('combinations_mode', False), progress=progress, direct_sources=payload['direct_sources'], **common)
         _PRIMARY_CACHE[key] = deepcopy(result)
         while len(_PRIMARY_CACHE) > 4:
             _PRIMARY_CACHE.popitem(last=False)
+    if payload.get('map_planning'):
+        # A handcrafted map stays attached to its selected primary route.
+        # Otherwise preview and recalculation can silently pick different bases.
+        result['plans']=[next((p for p in result['plans'] if p['area_set_id']==payload.get('selected_plan_key')),result['plans'][0])]
     if payload.get('planner_mode') == 'passive':
         result['production_interval'] = payload.get('production_interval',60)
     progress(0, None)
     if payload.get('secondary'):
         for i, primary in enumerate(result['plans']):
             progress(0, None)
-            result['plans'][i] = consume_leftovers(catalog, primary, payload['secondary'], areas=sorted((set(payload['automatic_areas']) & set(payload['areas']) if payload.get('automatic_areas') is not None else set(payload['areas'])) | {a['location_id'] for a in primary['areas']}), max_areas=payload.get('max_areas', 3), progress=lambda: progress(0, None), defer_comparison=deferred.append if deferred is not None else None, map_planning=payload.get("map_planning", False), map_sources=payload.get("map_sources"), map_source_explores=payload.get("map_source_explores"), map_node_usage=payload.get("map_node_usage"))
+            result['plans'][i] = consume_leftovers(catalog, primary, payload['secondary'], areas=sorted((set(payload['areas']) if payload.get('map_planning') else set(payload['automatic_areas']) & set(payload['areas']) if payload.get('automatic_areas') is not None else set(payload['areas'])) | {a['location_id'] for a in primary['areas']}), max_areas=payload.get('max_areas', 3), progress=lambda: progress(0, None), defer_comparison=deferred.append if deferred is not None else None, map_planning=payload.get("map_planning", False), map_sources=payload.get("map_sources"), map_source_explores=payload.get("map_source_explores"), map_node_usage=payload.get("map_node_usage"))
     result['plans'].sort(key=lambda p: (p['optimal_total_explores'], len(p['areas'])))
     unique = {}
     for p in result['plans']:
@@ -180,13 +193,19 @@ def guided_compute(catalog, payload, progress=lambda message: None):
     baseline = compute(catalog, dict(payload, secondary=[], provided_targets={}), lambda done,total: progress(f'Checking primary routes: {done}…') if done else None)
     primary = next((p for p in baseline['plans'] if p['area_set_id']==payload.get('selected_plan_key')), baseline['plans'][0])
     goals = payload.get('secondary', [])
-    areas = sorted((set(payload.get('automatic_areas') or payload['areas']) & set(payload['areas'])) | {a['location_id'] for a in primary['areas']})
+    areas = sorted((set(payload['areas']) if payload.get('map_planning') else set(payload.get('automatic_areas') or payload['areas']) & set(payload['areas'])) | {a['location_id'] for a in primary['areas']})
     def allocate(gs, source_choices=None, source_amounts=None, node_usage=None):
-        solved = consume_leftovers(catalog, primary, gs, areas=areas, defer_comparison=lambda _:None,
+        base=primary
+        if source_choices is not None:
+            before_payload=dict(payload,map_sources=source_choices,secondary=[],provided_targets={})
+            if map_direct_sources(catalog,before_payload)!=map_direct_sources(catalog,payload):
+                previous=compute(catalog,before_payload)
+                base=next((p for p in previous['plans'] if p['area_set_id']==payload.get('selected_plan_key')),previous['plans'][0])
+        solved = consume_leftovers(catalog, base, gs, areas=areas, defer_comparison=lambda _:None,
             map_planning=payload.get("map_planning", False),
             map_sources=payload.get("map_sources") if source_choices is None else source_choices,
             map_source_explores=payload.get("map_source_explores") if source_amounts is None else source_amounts,
-            map_node_usage=payload.get("map_node_usage") if node_usage is None else node_usage) if gs else deepcopy(primary)
+            map_node_usage=payload.get("map_node_usage") if node_usage is None else node_usage) if gs else deepcopy(base)
         return credit_external_targets(solved, payload.get('provided_targets'))
     current = allocate(goals, payload.get('previous_map_sources'), payload.get('previous_map_source_explores'), payload.get('previous_map_node_usage'))
     before = {b['item_id']:b for b in current['item_balances']}

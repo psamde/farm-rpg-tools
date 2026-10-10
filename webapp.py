@@ -8,7 +8,7 @@ from threading import Lock
 from urllib.parse import urlsplit
 from uuid import uuid4
 
-from browser_engine import catalog_with_perks, target_inventory_savings, credit_external_targets
+from browser_engine import catalog_with_perks, target_inventory_savings, credit_external_targets, map_direct_sources
 from farmdata import read_json
 from planner import plan, ranked_plans, resolve, exploration_target_ids, passive_plans, calculation_error
 from secondary import validate_secondary, consume_leftovers
@@ -124,7 +124,9 @@ class Application:
                 result['production_interval'] = payload.get('production_interval',60)
             else:
                 result = ranked_plans(catalog, payload['targets'], max_areas=len(self.catalog['locations']),
-                                      combinations_mode=payload.get('combinations_mode', False), progress=progress, **common)
+                                      combinations_mode=payload.get('combinations_mode', False), progress=progress, direct_sources=map_direct_sources(catalog,payload), **common)
+            if payload.get('map_planning'):
+                result['plans']=[next((p for p in result['plans'] if p['area_set_id']==payload.get('selected_plan_key')),result['plans'][0])]
             progress(job['done'], job['total'])
             if payload.get('secondary'):
                 for i, primary in enumerate(result['plans']):

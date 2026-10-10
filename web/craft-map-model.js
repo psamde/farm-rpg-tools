@@ -24,7 +24,9 @@ function craftMapMissingInputs(items,nodes,itemId){
  function visit(id){
   if(seen.has(id))return;seen.add(id);
   const item=items[id],node=byId.get(id);
-  if(!item||node?.free||node?.autoSupply||(id!==itemId&&(node?.stock||0)>1e-8))return;
+  if(!item||node?.free||node?.autoSupply)return;
+  if(id!==itemId&&item.explorable&&(node?.potentialMissing||0)>=10){missing.push(id);return;}
+  if(id!==itemId&&(node?.stock||0)>1e-8)return;
   if(item.craftable){for(const child of Object.keys(item.direct_ingredients||{}))visit(child);}
   else if(node&&!(node.totalSupply>0))missing.push(id);
  }
@@ -78,10 +80,11 @@ function buildCraftMap(items,plan,settings,drafts=[],expanded=[]){
  // Show only recipe branches actually crafted in this plan or proposed draft.
  const crafted=id=>(balances[id]?.crafted||0)/(items[id]?.output_quantity||1)+(draftCrafts[id]||0);
  const active=new Set(),inactiveRecipes=new Set();
+ const directGaps=new Set((plan.map_potential?.missing||[]).filter(r=>r.quantity>0&&items[r.item_id]?.explorable).map(r=>r.item_id));
  function activate(id){if(active.has(id)||!items[id])return;active.add(id);if(!free(id)&&crafted(id)>1e-8)Object.keys(items[id].direct_ingredients).forEach(activate);}
  roots.forEach(activate);
  // Keep the recipe visible when a selected leftover craft currently makes zero.
- function showInactive(id){if(free(id)||!items[id]?.craftable||inactiveRecipes.has(id)||crafted(id)>1e-8)return;inactiveRecipes.add(id);for(const child of Object.keys(items[id].direct_ingredients)){active.add(child);showInactive(child);}}
+ function showInactive(id){if(free(id)||!items[id]?.craftable||inactiveRecipes.has(id)||crafted(id)>1e-8||directGaps.has(id)&&!roots.has(id))return;inactiveRecipes.add(id);for(const child of Object.keys(items[id].direct_ingredients)){active.add(child);showInactive(child);}}
  for(const goal of [...(settings.secondary||[]),...drafts])if(crafted(goal.item_id)<1e-8)showInactive(goal.item_id);
  const primaryCrafts=plan.crafts_in_dependency_order?Object.fromEntries(plan.crafts_in_dependency_order.map(c=>[c.item_id,c.crafts])):null;
  const requiredUse={};

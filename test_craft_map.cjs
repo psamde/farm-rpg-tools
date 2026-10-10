@@ -239,3 +239,20 @@ const {craftMapDemandAllocation}=require('./web/craft-map-model.js');
 const suppliedOnly=buildCraftMap(items,{item_balances:[],areas:[]},{targets:{[id('Purple Diary')]:100},provided_targets:{[id('Purple Diary')]:{quantity:100,taken:0}},secondary:[]});
 assert(!suppliedOnly.nodes.some(n=>n.id===id('Purple Diary')||n.id===id('Mushroom')));
 console.log('Provided primary goals do not generate phantom crafting branches.');
+
+// Directly explorable intermediate gaps stop at that item, even with a fractional leftover.
+{
+ const {craftMapMissingInputs}=require('./web/craft-map-model.js');
+ const enriched=Object.fromEntries(JSON.parse(fs.readFileSync('web/catalog.json','utf8')).metadata.items.map(i=>[i.id,i]));
+ const orb=id('Glass Orb'),shimmer=id('Shimmer Stone'),juice=id('Orange Juice');
+ const settings={targets:{},secondary:[{item_id:juice,consumer_mode:'available',cap:null}]};
+ const plan={areas:[],item_balances:[],map_potential:{missing:[{item_id:orb,quantity:50000}]}};
+ const graph=buildCraftMap(enriched,plan,settings);
+ assert(graph.nodes.some(n=>n.id===orb));
+ assert(!graph.nodes.some(n=>n.id===shimmer));
+ Object.assign(graph.nodes.find(n=>n.id===orb),{stock:0.2,potentialMissing:50000});
+ assert(craftMapMissingInputs(enriched,graph.nodes,juice).includes(orb));
+ // Without a solver-confirmed direct gap, keep the crafting fallback visible.
+ assert(buildCraftMap(enriched,{...plan,map_potential:{missing:[]}},settings).nodes.some(n=>n.id===shimmer));
+ console.log('Glass Orb gaps offer exploration without hiding the fallback when direct supply is unavailable.');
+}

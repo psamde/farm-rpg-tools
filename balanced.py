@@ -349,6 +349,8 @@ def _consume_map(catalog, primary, goals, areas, progress, source_choices, sourc
     caps = {g['item_id']: g['cap'] for g in goals if g['cap'] is not None}
     for r, cap in caps.items():
         if r in C: bounds[C[r]] = (0, cap)
+    for r, locations in chosen.items():
+        if locations and r in C and r not in selected: bounds[C[r]] = (0,0)
     for area, col in E.items(): bounds[col] = (0, None if area in extra_areas else 0)
     constrained = [j for j, r in enumerate(refs) if r not in automatic_external]
     base_A = np.vstack([-matrix[constrained], *[row.reshape(1, -1) for row, _ in limit_rows]])
@@ -400,8 +402,8 @@ def _consume_map(catalog, primary, goals, areas, progress, source_choices, sourc
             current_upper = bounds[C[r]][1]
             bounds[C[r]] = (0, aim if current_upper is None else min(current_upper, aim))
         aims[r] = min(100000000, max(0, aim))
-    # Only selected source ingredients justify route growth. Every co-product is
-    # available to every recipe in the final allocation, without further travel.
+    # Selected source ingredients determine this phase of route growth. Every
+    # co-product is available to every recipe in the final allocation.
     assisted = {r for r in terminal | set(fixed) if any(locations and ref in needs(r) for ref, locations in chosen.items())}
     source_aims = {r: aims[r] for r in assisted if aims.get(r, 0) > 0}
 
@@ -453,7 +455,12 @@ def _consume_map(catalog, primary, goals, areas, progress, source_choices, sourc
     for r in terminal:
         upper = bounds[C[r]][1]
         bounds[C[r]] = (0, min(upper if upper is not None else math.inf, aims.get(r, 0)))
-    constrained = [j for j, r in enumerate(refs) if r not in automatic_external and (r in C or pool[r] > 1e-8)]
+    # Potential demand can use direct exploration drops of intermediates.
+    # Requiring the full crafting chain here hides the missing intermediate
+    # behind tiny raw-material leftovers (e.g. Glass Orb -> drink bottles).
+    direct_supply = {r for r in C if r not in selected and any(rates[a][r] > 0 for a in rates)}
+    constrained = [j for j, r in enumerate(refs) if r not in automatic_external
+                   and r not in direct_supply and (r in C or pool[r] > 1e-8)]
     base_A = np.vstack([-matrix[constrained], *[row.reshape(1, -1) for row, _ in limit_rows]])
     base_b = np.r_[[pool[refs[j]] for j in constrained], [q for _, q in limit_rows]]
     potential_scales = {r: aims[r] for r in terminal if aims.get(r, 0) > 0}
@@ -494,6 +501,32 @@ def _consume_map(catalog, primary, goals, areas, progress, source_choices, sourc
         if source_constraints and not any(route[col] > 1e-7 for col in E.values()):
             route = solve(cost, [*route_constraints, *source_constraints])
         extra_e = {a: int(math.ceil(max(0, route[col]) - 1e-7)) for a, col in E.items()}
+    # Force Use All is an explicit request to fill missing ingredients. Freeze
+    # its demand before travel: extra drops may help, but never grow that goal.
+    # Use + Void still keeps the caller's source amounts exactly as chosen.
+    force_route = sorted(r for r, choice in node_usage.items() if choice['mode']=='force'
+                         and r in usage_rows and r not in automatic_external and np.any(usage_rows[r]))
+    frozen_force = {r: pool[r] + sum(extra_e[a]*rates[a][r] for a in E) for r in force_route}
+    if fixed or any(q>1e-7 for q in frozen_force.values()):
+        for a,col in E.items(): bounds[col]=(extra_e[a],None)
+        cost=np.zeros(n)
+        for col in E.values(): cost[col]=1
+        # Explicit craft quantities retain first claim, including when a forced
+        # material is itself needed by those crafts.
+        _, route_constraints=fair(fixed)
+        start=solve(cost,route_constraints)
+        route_rewards,route_scales,route_offsets={}, {}, {}
+        for r,target in frozen_force.items():
+            if target<=1e-7: continue
+            row=usage_rows[r].copy()
+            if r in C: row[C[r]]-=items[r]['output_quantity']
+            baseline=float(row @ start)
+            if target<=baseline+1e-7: continue
+            route_rewards[r]=row; route_offsets[r]=baseline; route_scales[r]=target-baseline
+            route_constraints.append((row,target))
+        _, route_constraints=fair(route_scales,route_constraints,route_rewards,route_offsets)
+        route=solve(cost,route_constraints)
+        extra_e={a:int(math.ceil(max(extra_e[a],route[col])-1e-7)) for a,col in E.items()}
     for a, col in E.items(): bounds[col] = (extra_e[a], extra_e[a])
     # Feasible independent maxima on the actual route normalize equal sharing.
     reserved = []
@@ -593,12 +626,12 @@ def _consume_map(catalog, primary, goals, areas, progress, source_choices, sourc
         goals=[dict(item_id=r, cap=float(potential_x[C[r]]), potential_crafts=float(potential_x[C[r]]))
                for r in sorted(C) if potential_x[C[r]] > 1e-7],
         missing=[dict(item_id=r, quantity=float(potential_need[j] - pool[r] - explored[r]))
-                 for j, r in enumerate(refs) if r not in C and r not in automatic_external and potential_need[j] > pool[r] + explored[r] + 1e-6])
+                 for j, r in enumerate(refs) if (r not in C or r in direct_supply) and r not in automatic_external and potential_need[j] > pool[r] + explored[r] + 1e-6])
     result['model'] = 'map recipes with progressive fair sharing and explicit exploration sources'
     result['solver']['scope'] = 'progressive max-min sharing; verified whole-craft repair'
     result['secondary']['semantics'] = (
         'Forced quantities get first claim. Available terminal recipes share achievable progress; '
-        'surplus intermediates use the remainder. Only selected sources add exploration.')
+        'surplus intermediates use the remainder. Selected sources and fixed Force Use All demands add exploration.')
     return result
 
 

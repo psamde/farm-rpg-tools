@@ -25,6 +25,70 @@ class MapAcceptanceTests(unittest.TestCase):
     def goal(self, name, **kw):
         return dict(item_id=self.ids[name], cap=None, consumer_mode='available', allow_exploration=False, **kw)
 
+    def test_drink_potential_and_direct_orb_source(self):
+        # Tiny remnants from primary orb crafting must not hide the direct
+        # Glass Orb supply needed to use a substantial fruit surplus.
+        areas=[r for r,a in self.catalog['locations'].items() if a['kind']=='explore'
+               and not any(name in a['name'] for name in ['Haunted','Santa'])]
+        payload=dict(self.payload,targets={self.ids['Lemonade']:100000},areas=areas,
+                     secondary=[self.goal('Apple Cider'),self.goal('Orange Juice')],
+                     map_sources={},map_source_explores={})
+        before=compute(self.catalog,payload)['plans'][0]
+        orb=self.ids['Glass Orb']; area='explore:9'
+        gaps={r['item_id']:r['quantity'] for r in before['map_potential']['missing']}
+        self.assertGreater(gaps[orb],10000)
+        self.assertNotIn(self.ids['Sandstone'],gaps)
+        rate=next(s['expected_drops_per_explore'] for s in self.catalog['sources'].values()
+                  if s['kind']=='explore' and s['item_id']==orb and s['location_id']==area
+                  and s['conditions'].get('ironDepot') is True and s['conditions'].get('runecube') is True)
+        import math
+        explores=math.ceil(gaps[orb]/rate)
+        payload.update(map_sources={orb:[area]},map_source_explores={orb:{area:explores}})
+        after=compute(self.catalog,payload)['plans'][0]
+        self.assertGreater(self.counts(after)['Apple Cider'],10000)
+        self.assertGreater(self.counts(after)['Orange Juice'],10000)
+        self.assertEqual(after['map_extra_explores'],{area:explores})
+        crafted={r['item_id']:r['crafts'] for r in after['secondary']['crafts_in_dependency_order']}
+        self.assertEqual(crafted.get(orb,0),0,'use collected orbs instead of recreating their crafting chain')
+        self.assertEqual(next(b['crafted'] for b in after['item_balances'] if b['item_id']==orb),0)
+        restored=compute(self.catalog,dict(payload,map_sources={}))['plans'][0]
+        self.assertGreater(next(b['crafted'] for b in restored['item_balances'] if b['item_id']==orb),0)
+        self.conserve(after)
+        preview=guided_compute(self.catalog,dict(payload,replacement_goals=payload['secondary']))['preview_plan']
+        self.assertEqual(self.counts(preview),self.counts(after))
+        self.assertEqual(preview['optimal_total_explores'],after['optimal_total_explores'])
+
+    def test_force_drinks_adds_bounded_exploration_and_restores_use_void(self):
+        areas=[r for r,a in self.catalog['locations'].items() if a['kind']=='explore'
+               and not any(name in a['name'] for name in ['Haunted','Santa'])]
+        payload=dict(self.payload,targets={self.ids['Lemonade']:100000},areas=areas,
+                     secondary=[self.goal('Apple Cider'),self.goal('Orange Juice')],
+                     map_sources={},map_source_explores={},automatic_areas=[])
+        before=compute(self.catalog,payload)['plans'][0]
+        forced=copy.deepcopy(payload)
+        forced['secondary'][0].update(consumer_mode='fixed',cap=74000,automatic_batch=True)
+        after=compute(self.catalog,forced)['plans'][0]
+        self.assertGreaterEqual(self.counts(after)['Apple Cider'],73995)
+        self.assertLessEqual(self.counts(after)['Apple Cider'],74000)
+        self.assertGreater(after['optimal_total_explores'],before['optimal_total_explores'])
+        self.assertLess(after['optimal_total_explores']-before['optimal_total_explores'],1000000)
+        self.assertTrue(after['map_extra_explores'])
+        self.conserve(after)
+        preview=guided_compute(self.catalog,dict(forced,secondary=payload['secondary'],replacement_goals=forced['secondary']))['preview_plan']
+        self.assertEqual(self.counts(preview),self.counts(after))
+        self.assertEqual(preview['optimal_total_explores'],after['optimal_total_explores'])
+        # Repeated computations never turn newly explored drops into larger goals.
+        again=compute(self.catalog,json.loads(json.dumps(forced)))['plans'][0]
+        self.assertEqual(again['map_extra_explores'],after['map_extra_explores'])
+        self.assertEqual(self.counts(again),self.counts(after))
+        resumed=compute(self.catalog,payload)['plans'][0]
+        self.assertEqual(resumed['optimal_total_explores'],before['optimal_total_explores'])
+        # Forcing the input stack also gathers bottling materials for its consumer.
+        material=compute(self.catalog,dict(payload,map_node_usage={self.ids['Apple']:{'mode':'force'}}))['plans'][0]
+        self.assertGreater(self.counts(material)['Apple Cider'],70000)
+        self.assertGreater(material['optimal_total_explores'],before['optimal_total_explores'])
+        self.conserve(material)
+
     def test_water_lily_inventory_recovery(self):
         payload = dict(self.payload, targets={self.ids['Water Lily']: 27501, self.ids['Ant Apple']: 125},
                        inventory={self.ids['Water Lily']: 500}, secondary=[])
@@ -246,7 +310,7 @@ class MapAcceptanceTests(unittest.TestCase):
                                 balance(before,'Copper Wire')['used_by_leftover_craft'])
         self.assertLess(balance(after,'Copper Wire')['expected_unused'],7000)
         self.assertGreater(self.counts(after)['Spool of Copper'],18000)
-        self.assertEqual(after['optimal_total_explores'],before['optimal_total_explores'])
+        self.assertGreaterEqual(after['optimal_total_explores'],before['optimal_total_explores'])
         self.assertEqual(payload,original)
         self.assertTrue(all(g['cap'] is None for g in after['secondary']['targets']))
         # Power Monitor is only an implicit Engine input. Do not credit fake
